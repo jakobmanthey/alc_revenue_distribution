@@ -2,7 +2,127 @@
 ### Berechnung der durchschnittlichen Ausgaben für eine Alkoholeinheit nach Getränketyp, Einkommensgruppe, Altersgruppe und Trinkgruppe
 ### =====================================================================================================================================
 
-library("tidyverse")
+# ==================================================================================================================================================================
+# 0) ESSENTIALS
+# ______________________________________________________________________________________________________________________
+# clean workspace
+rm(list=ls())
+
+packages <- c("tidyverse", "readxl") 
+
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+# Load packages
+invisible(lapply(packages, library, character.only = TRUE))
+
+# ==================================================================================================================================================================
+# 1) LOAD DATA
+# ______________________________________________________________________________________________________________________
+#EVS
+evs_path <- file.path("EVS/Data", "evs_ngt2018_slr.csv")
+evs_raw <- read.csv(evs_path, header = TRUE, sep = ";", dec = ",", stringsAsFactors = FALSE)
+#ESA
+esa_path <- file.path("ESA", "ESA_Alc_Share_240221.xlsx")
+esa_trinkgruppen <- readxl::read_excel(esa_path, sheet = "Trinkgruppen")
+esa_socgruppen <- readxl::read_excel(esa_path, sheet = "Soziodemographische Gruppen")
+
+# ==================================================================================================================================================================
+# 2) DATA PREPARATION
+# ______________________________________________________________________________________________________________________
+# EVS
+# Filtern und Umbenennen der relevanten Variablen
+evs <- evs_raw %>%
+  rename(ID = "EF3", #HaushaltsID
+         N_Haushaltsmitglieder = "EF7", #Anzahl Personen im Haushalt, Wie Personen <18 Jahren identifizieren und exkludieren?
+         Stellung_pers1 = "EF8u1", #Stellung im Haushalt Person 1 = Haupteinkommensbezieher
+         sex_pers1 = "EF8u2", #Geschlecht Person 1
+         yob_pers1 = "EF8u3", #Alter Person 1
+         Stellung_pers2 = "EF9u1", #Stellung im Haushalt Person 2
+         sex_pers2 = "EF9u2", #Geschlecht Person 2
+         yob_pers2 = "EF9u3", #Alter Person 2
+         Stellung_pers3 = "EF10u1", #Stellung im Haushalt Person 3
+         sex_pers3 = "EF10u2", #Geschlecht Person 3
+         yob_pers3 = "EF10u3", #Alter Person 3
+         Stellung_pers4 = "EF11u1",
+         sex_pers4 = "EF11u2",
+         yob_pers4 = "EF11u3",
+         Stellung_pers5 = "EF12u1",
+         sex_pers5 = "EF12u2",
+         yob_pers5 = "EF12u3",
+         Stellung_pers6 = "EF13u1",
+         sex_pers6 = "EF13u2",
+         yob_pers6 = "EF13u3",
+         Stellung_pers7 = "EF14u1",
+         sex_pers7 = "EF14u2",
+         yob_pers7 = "EF14u3",
+         Stellung_pers8 = "EF15u1",
+         n_kinder_u1 = "EF22", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt unter 1 Jahr
+         n_kinder_1_3 = "EF23", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 1 bis unter 3
+         n_kinder_3_6 = "EF24", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 3 bis unter 6
+         n_kinder_6_12 = "EF25", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 6 bis unter 12
+         n_kinder_12_18 = "EF26", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 12 bis unter 18
+         haushaltsnettoeinkommen = "EF30", #Haushaltsnettoeinkommen aus der Quartalsrechnung ( + / - Vorzeichen)
+         bier_untergärig_wert = "EF284u2", #ausgegebener Betrag für untergäriges Bier
+         bier_untergärig_menge = "EF284u1", #Menge des gekauften untergärigen Biers
+         bier_anderes_wert = "EF285u2", #ausgegebener Betrag für anderes Bier (altbier, kölsch, weizen, ...)
+         bier_anderes_menge = "EF285u1", #Menge des gekauften anderen Biers
+         bier_misch_wert = "EF287u2", #ausgegebener Betrag für Biermischgetränke, z.B. mit Cola
+         bier_misch_menge = "EF287u1", #Menge des gekauften Biermischgetränks
+         bier_ohneBez_wert = "EF288u2", #ausgegebener Betrag für Bier ohne nähere Bezeichnung
+         bier_ohneBez_menge = "EF288u1", #Menge des gekauften Biers ohne nähere Bezeichnung
+         mischgetraenke_wert = "EF272u2", #ausgegebener Betrag für Erfrischungsmixgetränke mit Alkoholgehalt unter 6%, z. B. Alkopops
+         mischgetraenke_menge = "EF272u1", #Menge des gekauften Erfrischungsmixgetränks
+         wein_rot_wert = "EF273u2", #ausgegebener Betrag für Rotwein
+         wein_rot_menge = "EF273u1", #Menge des gekauften Rotweins
+         wein_weiss_wert = "EF274u2", #ausgegebener Betrag für Weißwein
+         wein_weiss_menge = "EF274u1", #Menge des gekauften Weißweins
+         wein_rose_wert = "EF275u2", #ausgegebener Betrag für Roséwein
+         wein_rose_menge = "EF275u1", #Menge des gekauften Roséweins
+         wein_schaum_wert = "EF276u2", #ausgegebener Betrag für Schaumwein
+         wein_schaum_menge = "EF276u1", #Menge des gekauften Schaumweins
+         wein_apfel_wert = "EF277u2", #ausgegebener Betrag für Apfelwein
+         wein_apfel_menge = "EF277u1", #Menge des gekauften Apfelweins
+         wein_frucht_wert = "EF278u2", #ausgegebener Betrag für Fruchtwein
+         wein_frucht_menge = "EF278u1", #Menge des gekauften Fruchtweins
+         wein_wermut_wert = "EF279u2", #ausgegebener Betrag für Wermut
+         wein_wermut_menge = "EF279u1", #Menge des gekauften Wermuts
+         wein_sherry_wert = "EF280u2", #ausgegebener Betrag für Sherry
+         wein_sherry_menge = "EF280u1", #Menge des gekauften Sherrys
+         wein_portwein_wert = "EF281u2", #ausgegebener Betrag für Portwein
+         wein_portwein_menge = "EF281u1", #Menge des gekauften Portweins
+         wein_anderes_wert = "EF282u2", #ausgegebener Betrag für andere weinhaltige Getränke
+         wein_anderes_menge = "EF282u1", #Menge der gekauften anderen weinhaltigen Getränke
+         wein_ohneBez_wert = "EF283u2", #ausgegebener Betrag für Wein ohne nähere Bezeichnung
+         wein_ohneBez_menge = "EF283u1", #Menge des gekauften Weins ohne nähere Bezeichnung
+         sprit_likör_wert = "EF268u2", #ausgegebener Betrag für Likör
+         sprit_likör_menge = "EF268u1", #Menge des gekauften Likörs
+         sprit_whisky_wert = "EF269u2", #ausgegebener Betrag für Whisky
+         sprit_whisky_menge = "EF269u1", #Menge des gekauften Whiskys
+         sprit_branntwein_wert = "EF270u2", #ausgegebener Betrag für Branntwein
+         sprit_branntwein_menge = "EF270u1", #Menge des gekauften Branntweins
+         sprit_anderes_wert = "EF271u2", #ausgegebener Betrag für andere Spirituosen  (z.B. Rum, Wodka, Korn, ...) mehr als 6% Alkohol
+         sprit_anderes_menge = "EF271u1") %>% #Menge der gekauften anderen Spirituosen 
+  select(ID, N_Haushaltsmitglieder, Stellung_pers1, sex_pers1, yob_pers1, Stellung_pers2, yob_pers2, Stellung_pers3, yob_pers3, Stellung_pers4,
+         yob_pers4, Stellung_pers5, yob_pers5, Stellung_pers6, yob_pers6, Stellung_pers7, yob_pers7, Stellung_pers8, n_kinder_u1, n_kinder_1_3,
+         n_kinder_3_6, n_kinder_6_12, n_kinder_12_18, haushaltsnettoeinkommen, bier_untergärig_wert, bier_untergärig_menge, bier_anderes_wert,
+         bier_anderes_menge, bier_misch_wert, bier_misch_menge, bier_ohneBez_wert, bier_ohneBez_menge, mischgetraenke_wert, mischgetraenke_menge,
+         wein_rot_wert, wein_rot_menge, wein_weiss_wert, wein_weiss_menge, wein_rose_wert, wein_rose_menge, wein_schaum_wert, wein_schaum_menge,
+         wein_apfel_wert, wein_apfel_menge, wein_frucht_wert, wein_frucht_menge, wein_wermut_wert, wein_wermut_menge, wein_sherry_wert,
+         wein_sherry_menge, wein_portwein_wert, wein_portwein_menge, wein_anderes_wert, wein_anderes_menge, wein_ohneBez_wert, wein_ohneBez_menge,
+         sprit_likör_wert, sprit_likör_menge, sprit_whisky_wert, sprit_whisky_menge, sprit_branntwein_wert, sprit_branntwein_menge, sprit_anderes_wert,
+         sprit_anderes_menge)
+         
+         
+         
+
+      
+         
+
+
+
 
 ### Dataset generieren (beispielhaft für EVS Daten)
 
