@@ -1,8 +1,7 @@
 ## To-Do:
 # - Hochrechnungsfaktoren brauchen wir nicht?
 # - Alkoholische Getränke (Käufe im Ausland) abziehen? wenn ja, wie? nicht spezifisch für Getränketype
-# - Wie umgehen mit Haushalten mit Durchschnittsalter > 64? derzeit werden diese nicht berücksichtigt (25%)
-# - Wie umgehen mit Geschlecht bei Haushalten mit mehreren Personen?
+# - Personen über 64 werden derzeit nicht berücksichtigt (25%)
 
 
 ### =====================================================================================================================================
@@ -363,68 +362,50 @@ evs_bis64_strata_trinkgruppe <- evs_bis64_strata %>%
     gesamtmenge_stdd_w > Riskant_p ~ 3,
     TRUE ~ NA)) #fallback falls keine der Bedingungen zutrifft
 
-#Trink- und Altersgruppe von numerisch in Faktor umwandeln (Einkommensgruppe ist bereits ein Faktor)
-#evs_bis64_strata_trinkgruppe <- evs_bis64_strata_trinkgruppe %>%
-#  mutate(altersgruppe = as.factor(altersgruppe),
-#         trinkgruppe = as.factor(trinkgruppe))
-
-## Fallzahlen pro Trinkgruppe, Einkommensgruppe und Altersgruppe ausgeben lassen
-
-# Fallzahl pro Trinkgruppe
-N_trinkgruppe <- as.data.frame(table(evs_bis64_strata_trinkgruppe$trinkgruppe))
-colnames(N_trinkgruppe) <- c("Gruppe", "N")
-
-# Fallzahl pro Altersgruppe
-N_altersgruppe <- as.data.frame(table(evs_bis64_strata_trinkgruppe$altersgruppe))
-colnames(N_altersgruppe) <- c("Gruppe", "N")
-
-# Fallzahl pro Sex
-N_sex <- as.data.frame(table(evs_bis64_strata_trinkgruppe$sex))
-colnames(N_sex) <- c("Gruppe", "N")
-
-# Fallzahl pro Einkommensgruppe
-N_einkommensgruppe <- as.data.frame(table(evs_bis64_strata_trinkgruppe$einkommensgruppe))
-colnames(N_einkommensgruppe) <- c("Gruppe", "N")
-
-# Fallzahl pro Stratum (TrinkgruppexEinkommensgruppexAltersgruppe)
-N_stratum_df <- evs_bis64_strata_trinkgruppe  %>%
-  group_by(trinkgruppe, altersgruppe, sex, einkommensgruppe) %>%
-  summarize(N_stratum = n())
-
 ## Ausgaben pro Standarddrink mit Konfidenzintervallen (pro Getränketyp x Einkommensgruppe x Altersgruppe x Trinkgruppe - Stratum)
 
 # Funktionen um Konfidenzintervall des means zu berechnen
 # untere Grenze
-mean_ci_low <- function(x, conf = 0.95) { 
-  se <- sd(x) / sqrt(length(x)) 
+mean_ci_low <- function(x, conf = 0.95, na.rm = FALSE) { 
+  if(na.rm) {
+    x <- x[!is.na(x)]
+  }
+  se <- sd(x, na.rm = TRUE) / sqrt(length(x)) 
   alpha <- 1 - conf 
-  mean(x) + se * qnorm(alpha / 2) 
+  mean(x, na.rm = TRUE) + se * qnorm(alpha / 2) 
 } 
 
-# obere Grenze
-mean_ci_high <- function(x, conf = 0.95) { 
-  se <- sd(x) / sqrt(length(x)) 
+mean_ci_high <- function(x, conf = 0.95, na.rm = FALSE) { 
+  if(na.rm) {
+    x <- x[!is.na(x)]
+  }
+  se <- sd(x, na.rm = TRUE) / sqrt(length(x)) 
   alpha <- 1 - conf 
-  mean(x) + se * qnorm(1-alpha/ 2) 
+  mean(x, na.rm = TRUE) + se * qnorm(1 - alpha / 2) 
 } 
 
 # Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Trinkgruppe)
 
 aggregated_spendings <- evs_bis64_strata_trinkgruppe %>%
+  mutate(
+    Bier_Wert_pro_stdd_w = ifelse(Bier_Wert_pro_stdd_w == 0, NA, Bier_Wert_pro_stdd_w), #setze 0 auf NA, um zu verhindern dass 0 in mean() einfließt
+    Wein_Wert_pro_stdd_w = ifelse(Wein_Wert_pro_stdd_w == 0, NA, Wein_Wert_pro_stdd_w),
+    Sprit_Wert_pro_stdd_w = ifelse(Sprit_Wert_pro_stdd_w == 0, NA, Sprit_Wert_pro_stdd_w)
+  ) %>%
   group_by(trinkgruppe, einkommensgruppe, altersgruppe, sex) %>%
   summarize(
     bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
-    bier_ci_low_wert_pro_stdd_w = mean_ci_low(Bier_Wert_pro_stdd_w),
-    bier_ci_high_wert_pro_stdd_w = mean_ci_high(Bier_Wert_pro_stdd_w),
+    bier_ci_low_wert_pro_stdd_w = mean_ci_low(Bier_Wert_pro_stdd_w, na.rm = TRUE),
+    bier_ci_high_wert_pro_stdd_w = mean_ci_high(Bier_Wert_pro_stdd_w, na.rm = TRUE),
+    bier_n = sum(!is.na(Bier_Wert_pro_stdd_w)),
     wein_avg_wert_pro_stdd_w = mean(Wein_Wert_pro_stdd_w, na.rm = TRUE),
-    wein_ci_low_wert_pro_stdd_w = mean_ci_low(Wein_Wert_pro_stdd_w),
-    wein_ci_high_wert_pro_stdd_w = mean_ci_high(Wein_Wert_pro_stdd_w),
+    wein_ci_low_wert_pro_stdd_w = mean_ci_low(Wein_Wert_pro_stdd_w, na.rm = TRUE),
+    wein_ci_high_wert_pro_stdd_w = mean_ci_high(Wein_Wert_pro_stdd_w, na.rm = TRUE),
+    wein_n = sum(!is.na(Wein_Wert_pro_stdd_w)),
     sprit_avg_wert_pro_stdd_w = mean(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
-    sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w),
-    sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w))
-
-# Fügt Fallzahl pro Stratum hinzu
-aggregated_spendings <- merge(aggregated_spendings, N_stratum_df, by = c("trinkgruppe", "altersgruppe", "sex", "einkommensgruppe"), all.x = TRUE)
+    sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
+    sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
+    sprit_n = sum(!is.na(Sprit_Wert_pro_stdd_w)))
 
 # Optional je nach Verwendungszweck: Erstellt neue Spalte "beverage_type" und wandelt ursprüngliche Spalten entsprechend in long-format um
 aggregated_spendings_long <- aggregated_spendings %>%
