@@ -320,23 +320,23 @@ esa_perctrinkgruppen$identifier <- paste(esa_perctrinkgruppen$Einkommen_new, esa
 ## -------dieser Teil ist später durch ESA Schätzungen zu ersetzen-------
 # Erstellt Liste von eindeutigen Identifiern (Kombination von Einkommens- und Altersgruppe)
 # um anschließend mittels sapply() für jedes Element Perzentilgrenzen zu generieren
-identifiers <- unique(evs$identifier)
+#identifiers <- unique(evs$identifier)
 
 
 # Funktion zur Generierung von Zufallswerten für untere (perc1) und obere (perc2) Perzentilgrenze
-generate_random_perc <- function() {
-  perc1 <- runif(1, min = 0.1, max = 0.9)
-  perc2 <- runif(1, min = perc1, max = 0.9)  # Stellt sicher, dass perc2 größer als perc1 ist
-  c(perc1 = perc1, perc2 = perc2)
-}
+#generate_random_perc <- function() {
+#  perc1 <- runif(1, min = 0.1, max = 0.9)
+#  perc2 <- runif(1, min = perc1, max = 0.9)  # Stellt sicher, dass perc2 größer als perc1 ist
+#  c(perc1 = perc1, perc2 = perc2)
+#}
 
 # Wendet Funktion 'generate_random_perc' auf jeden identifier an
 # Ergebnis ist Liste von Vektoren mit zufällig generierten Perzentilgrenzen für jede Einkommens- und Altersgruppen-Kombination
-random_perc <- sapply(identifiers, function(id) generate_random_perc())
+#random_perc <- sapply(identifiers, function(id) generate_random_perc())
 
 # Erstellt DataFrame mit identifiers und den zugehörigen zufällig generierten Perzentilgrenzen
 # t() transponiert den Vektor 'random_perc', sodass jede Zeile die Perzentilgrenzen für eine spezifische Kombination repräsentiert
-pertentiles_by_strata <- data.frame(identifier = identifiers, t(random_perc), row.names = NULL)
+#pertentiles_by_strata <- data.frame(identifier = identifiers, t(random_perc), row.names = NULL)
 
 ## ----------ENDE Ersatz ESA Daten--------------
 selected_esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
@@ -378,13 +378,17 @@ colnames(N_trinkgruppe) <- c("Gruppe", "N")
 N_altersgruppe <- as.data.frame(table(evs_bis64_strata_trinkgruppe$altersgruppe))
 colnames(N_altersgruppe) <- c("Gruppe", "N")
 
+# Fallzahl pro Sex
+N_sex <- as.data.frame(table(evs_bis64_strata_trinkgruppe$sex))
+colnames(N_sex) <- c("Gruppe", "N")
+
 # Fallzahl pro Einkommensgruppe
 N_einkommensgruppe <- as.data.frame(table(evs_bis64_strata_trinkgruppe$einkommensgruppe))
 colnames(N_einkommensgruppe) <- c("Gruppe", "N")
 
 # Fallzahl pro Stratum (TrinkgruppexEinkommensgruppexAltersgruppe)
 N_stratum_df <- evs_bis64_strata_trinkgruppe  %>%
-  group_by(trinkgruppe, altersgruppe, einkommensgruppe) %>%
+  group_by(trinkgruppe, altersgruppe, sex, einkommensgruppe) %>%
   summarize(N_stratum = n())
 
 ## Ausgaben pro Standarddrink mit Konfidenzintervallen (pro Getränketyp x Einkommensgruppe x Altersgruppe x Trinkgruppe - Stratum)
@@ -407,7 +411,7 @@ mean_ci_high <- function(x, conf = 0.95) {
 # Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Trinkgruppe)
 
 aggregated_spendings <- evs_bis64_strata_trinkgruppe %>%
-  group_by(trinkgruppe, einkommensgruppe, altersgruppe) %>%
+  group_by(trinkgruppe, einkommensgruppe, altersgruppe, sex) %>%
   summarize(
     bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
     bier_ci_low_wert_pro_stdd_w = mean_ci_low(Bier_Wert_pro_stdd_w),
@@ -420,7 +424,7 @@ aggregated_spendings <- evs_bis64_strata_trinkgruppe %>%
     sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w))
 
 # Fügt Fallzahl pro Stratum hinzu
-aggregated_spendings <- merge(aggregated_spendings, N_stratum_df, by = c("trinkgruppe", "altersgruppe", "einkommensgruppe"), all.x = TRUE)
+aggregated_spendings <- merge(aggregated_spendings, N_stratum_df, by = c("trinkgruppe", "altersgruppe", "sex", "einkommensgruppe"), all.x = TRUE)
 
 # Optional je nach Verwendungszweck: Erstellt neue Spalte "beverage_type" und wandelt ursprüngliche Spalten entsprechend in long-format um
 aggregated_spendings_long <- aggregated_spendings %>%
@@ -431,3 +435,5 @@ aggregated_spendings_long <- aggregated_spendings %>%
 
 # Ergebnisse als csv ausgeben lassen
 write.csv(aggregated_spendings_long, "spendingsperdrink.csv")
+#... and as RDS
+saveRDS(aggregated_spendings_long, "spendingsperdrink.rds")
