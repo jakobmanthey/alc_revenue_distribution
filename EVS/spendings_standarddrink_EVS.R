@@ -1,5 +1,5 @@
 ### =====================================================================================================================================
-### Berechnung der durchschnittlichen Ausgaben für eine Alkoholeinheit nach Getränketyp, Einkommensgruppe, Altersgruppe und Trinkgruppe
+### Berechnung der durchschnittlichen Ausgaben für einen Standarddrink nach Getränketyp, Einkommensgruppe, Altersgruppe, Geschlecht und Trinkgruppe
 ### =====================================================================================================================================
 
 # ==================================================================================================================================================================
@@ -8,7 +8,7 @@
 # clean workspace
 rm(list=ls())
 
-packages <- c("tidyverse", "readxl") 
+packages <- c("tidyverse", "readxl", "ggdist") 
 
 # Install packages not yet installed
 installed_packages <- packages %in% rownames(installed.packages())
@@ -188,6 +188,13 @@ summary(evs$netequincome) #median 2354
 #laut statistischem bundesamt liegt das median äquivalenzeinkommen bei 22713/12 = 1892 euro
 #evtl. hier erhöht, weil hochrechnugnsfaktoren nciht berücksichtigt?
 
+## Terzile für Nettohaushaltseinkommen -> Bilden der Einkommensgruppen
+# Einkommensgruppe: 1 = 1. Terzil, 2 = 2. Terzil, 3 = 3. Terzil des Nettoäquivaleinkommens
+terzile_einkommen_grenzen <- quantile(evs$netequincome, c(0, 1/3, 2/3, 1)) #Terzile finden
+evs$einkommensgruppe <- cut(evs$netequincome, #neue Spalte mit Einkommensgruppen bilden
+                            breaks = terzile_einkommen_grenzen,
+                            labels = c(1, 2, 3), include.lowest = TRUE)
+
 # ______________________________________________________________________________________________________________________
 #summarize bier, wein, sprit
 evs$Bier_Wert <- evs$bier_untergärig_wert + evs$bier_anderes_wert + evs$bier_misch_wert + evs$bier_ohneBez_wert
@@ -199,7 +206,7 @@ evs$Sprit_Menge <- evs$sprit_likör_menge + evs$sprit_whisky_menge + evs$sprit_b
 # ______________________________________________________________________________________________________________________
 
 # ==================================================================================================================================================================
-## 3) Berechnungen: gewichtete (nach Anzahl erwachsener Haushaltsmitgleider) Ausgaben pro Standarddrink
+## 3) Berechnungen: gewichtete (nach Anzahl erwachsener Haushaltsmitgleider) Ausgaben pro Standarddrink auf Haushaltsebene
 # ______________________________________________________________________________________________________________________
 
 ## gekaufte Mengen und Ausgaben (Wert) nach Anzahl der Haushaltsmitglieder gewichten
@@ -223,55 +230,66 @@ evs$Sprit_Wert_pro_stdd_w <- with(evs, ifelse(sprit_menge_stdd_w != 0, Sprit_Wer
 
 ## Gesamtmenge an Standarddrinks pro Haushalt (dient als proxy für die Trinkgruppen)
 evs$gesamtmenge_stdd_w = with(evs, bier_menge_stdd_w + wein_menge_stdd_w + sprit_menge_stdd_w)
-#plausi check: plot histogram of gesamtmenge_stdd_w
+#plausi check: plot histogram der gesamtmenge_stdd_w
 hist(evs$gesamtmenge_stdd_w, breaks = 100, xlim = c(0, 400)) 
 #cases with gesamtmenge_stdd_w = 0
 sum(evs$gesamtmenge_stdd_w == 0)/nrow(evs) # n=2850 Haushalte bzw. 27.5% aller Haushalte kaufen gar kein Alkohol
 
-
-## Terzile für Nettohaushaltseinkommen -> Bilden der Einkommensgruppen
-# Einkommensgruppe: 1 = 1. Terzil, 2 = 2. Terzil, 3 = 3. Terzil des Nettohaushaltseinkommens
-terzile_einkommen_grenzen <- quantile(evs$netequincome, c(0, 1/3, 2/3, 1)) #Terzile finden
-evs$einkommensgruppe <- cut(evs$netequincome, #neue Spalte mit Einkommensgruppen bilden
-                                     breaks = terzile_einkommen_grenzen,
-                                     labels = c(1, 2, 3), include.lowest = TRUE)
-
 #------------------------------------------------------------
-#plausi checks
+#plausi checks der Ausgaben pro stddrink
 ggplot(evs[evs$Wein_Wert_pro_stdd_w>0, ], aes(x =  einkommensgruppe, y = Wein_Wert_pro_stdd_w)) +
   geom_boxplot() +
-  scale_y_continuous(limits = c(0, 5)) #higher income -> higher spending per stddrink
+  scale_y_continuous(limits = c(0, 5)) #hohes einkommen -> höhere ausgaben pro stddrink, plausibel
 
-summary(evs[evs$Wein_Wert_pro_stdd_w>0, ]$Wein_Wert_pro_stdd_w) #median spending of 0.5€ per stddrink -> too low?
+summary(evs[evs$Wein_Wert_pro_stdd_w>0, ]$Wein_Wert_pro_stdd_w) #median spending 0.5€ per stddrink -> zu niedrig
 
 
 ggplot(evs[evs$Bier_Wert_pro_stdd_w>0, ], aes(x =  einkommensgruppe, y = Bier_Wert_pro_stdd_w)) +
   geom_boxplot() +
-  scale_y_continuous(limits = c(0, 2)) #higher income -> higher spending per stddrink
+  scale_y_continuous(limits = c(0, 2)) #hohes einkommen -> höhere ausgaben pro stddrink, plausibel
 
-summary(evs[evs$Bier_Wert_pro_stdd_w>0, ]$Bier_Wert_pro_stdd_w) #median spending of 0.5€ per stddrink -> too low?
+summary(evs[evs$Bier_Wert_pro_stdd_w>0, ]$Bier_Wert_pro_stdd_w) #median spending 0.5€ per stddrink -> zu niedrig
+summary(evs[evs$Sprit_Wert_pro_stdd_w>0, ]$Sprit_Wert_pro_stdd_w)
 
-#show rows that have Bier_Wert_pro_stdd_w < 0.2 but not 0
+# check: Kontrolliere, ob Ausgaben pro stdd korrekt berechnet wurden beispielhaft für sehr niedrige Ausgaben
 evs[evs$Bier_Wert_pro_stdd_w < 0.2 & evs$Bier_Wert_pro_stdd_w != 0, c("N_Haushaltsmitglieder_adult", "Bier_Wert", "Bier_Menge", "Bier_Wert_pro_stdd_w", "Bier_Wert_w", "Bier_Menge_w", "bier_menge_stdd_w")]
-#calculation looks good
-#------------------------------------------------------------
+#Berechnung sieht korrekt aus
+
+# data to long format für plotting
+evs_long_tmp <- evs %>%
+  pivot_longer(cols=c("Bier_Wert_pro_stdd_w", "Wein_Wert_pro_stdd_w", "Sprit_Wert_pro_stdd_w"), names_to = "getraenketyp", values_to = "ausgaben_pro_stdd") %>%
+  filter(ausgaben_pro_stdd > 0) #nur Haushalte mit gekauften Getränken
+
+# plot Verteilung der Ausgaben pro Standarddrink nach Getränketyp -> sieht okay aus, wenn auch insgesamt sehr niedrige Ausgaben
+ggplot(evs_long_tmp, aes(x = getraenketyp, y = ausgaben_pro_stdd)) +
+  geom_violin() +
+  geom_boxplot(width = 0.2, outlier.shape = NA) +
+  geom_jitter(width = 0.45, size = 0.2, alpha=0.2) +
+  scale_x_discrete(labels = c("Wein_Wert_pro_stdd_w" = "Wein", "Bier_Wert_pro_stdd_w" = "Bier", "Sprit_Wert_pro_stdd_w" = "Spirituosen")) +
+  labs(title = "Verteilung der Ausgaben pro Standarddrink nach Getränketyp",
+       subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein)",
+       y = "Ausgaben pro Standarddrink (€)", x = "Getränketyp") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95)), breaks = seq(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95), 0.1))
 
 # ==================================================================================================================================================================
-#tranform data to long format (one row per person, values to "sex" and "yob")
+# 4) Berechnungen: Ausgaben pro Standarddrink gruppenspezifisch aggregiert
+
+# Tranformiere Daten ins long format (eine Zeile pro Person, statt Zeile pro Haushalt, values to "sex" und "yob") um sex and age zu separieren (vorher nur auf Haushaltsebene)
 evs_long <- evs %>%
   pivot_longer(cols = grep("sex_pers|yob_pers", names(evs)), names_to = c(".value", "person"), values_to = c("sex", "yob"), names_pattern = "(sex|yob)_pers(\\d)")
 
+#______________________________________________________________________________________________________________________
+# 4.1) Alter berechnen und Altersgruppen bilden
 calculate_age <- function(year_of_birth) {
   current_year <- 2018  # year of evs data collection
   age <- current_year - year_of_birth
   return(age)
 }
 
-
-#add age to evs_long
 evs_long$age <- calculate_age(evs_long$yob)
 
-#include only adults between age 18 and 64
+# nur Erwachsene zwischen 18 und 64 Jahren berücksichtigen
 evs_adultsbis64 <- evs_long %>%
   filter(age >= 18 & age <= 64) 
 
@@ -287,9 +305,10 @@ evs_adultsbis64 <- evs_adultsbis64 %>%
 table(evs_adultsbis64$altersgruppe, useNA = "ifany")
 prop.table(table(evs_adultsbis64$altersgruppe, useNA = "ifany"))
 
-## TRINKGRUPPEN bilden
+#______________________________________________________________________________________________________________________
+# 4.2) TRINKGRUPPEN bilden
 ## = Perzentile für Gesamtmengen an Standarddrinks (proxy für Trinkgruppen) berechnen
-## Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen (Quelle: Schätzungen des ESA).
+## Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen (Quelle: Schätzungen des ESA)
 
 # Identifier für alle Kombinationen von Einkommen, Alter und Geschlecht bilden
 evs_adultsbis64$identifier <- paste(evs_adultsbis64$einkommensgruppe, evs_adultsbis64$altersgruppe, evs_adultsbis64$sex, sep = "_")
@@ -306,11 +325,10 @@ evs_bis64_strata <- merge(selected_esa_perctrinkgruppen, evs_adultsbis64, by = c
 # jeweiligen Grenzwerten verglichen und eine Gruppeneinteilung (Trinkgruppen) vorgenommen
 
 evs_bis64_strata_trinkgruppe <- evs_bis64_strata %>%
-  filter(gesamtmenge_stdd_w > 0) %>% #nur Haushalte mit gekauften Getränken
+  filter(gesamtmenge_stdd_w > 0) %>% #nur Haushalte mit gekauften Getränken (nur "Konsumierende")
   group_by(identifier) %>%
   mutate(Risikoarm_p = quantile(gesamtmenge_stdd_w, Risikoarm),
          Riskant_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant))) %>%
-#         Hoch_p = quantile(gesamtmenge_stdd_w, Hoch)) 
   ungroup() %>%
   # weist jeder Zeile in 'evs_bis64_strata' eine Trinkgruppe zu basierend auf den berechneten Perzentilen
   mutate(trinkgruppe = case_when(
@@ -319,7 +337,8 @@ evs_bis64_strata_trinkgruppe <- evs_bis64_strata %>%
     gesamtmenge_stdd_w > Riskant_p ~ 3,
     TRUE ~ NA)) #fallback falls keine der Bedingungen zutrifft
 
-## Ausgaben pro Standarddrink mit Konfidenzintervallen (pro Getränketyp x Einkommensgruppe x Altersgruppe x Trinkgruppe - Stratum)
+#______________________________________________________________________________________________________________________
+# 4.3) Ausgaben pro Standarddrink mit Konfidenzintervallen (pro Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe - Stratum)
 
 # Funktionen um Konfidenzintervall des means zu berechnen
 # untere Grenze
@@ -341,7 +360,7 @@ mean_ci_high <- function(x, conf = 0.95, na.rm = FALSE) {
   mean(x, na.rm = TRUE) + se * qnorm(1 - alpha / 2) 
 } 
 
-# Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Trinkgruppe)
+# Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe)
 
 aggregated_spendings <- evs_bis64_strata_trinkgruppe %>%
   mutate(
@@ -371,7 +390,7 @@ aggregated_spendings_long <- aggregated_spendings %>%
   separate(original_column, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
   pivot_wider(names_from = stat_type, values_from = value)
 
-# Ergebnisse als csv ausgeben lassen
+# Ergebnisse als csv 
 write.csv(aggregated_spendings_long, "spendingsperdrink.csv")
-#... and as RDS
+# und als RDS ausgeben lassen
 saveRDS(aggregated_spendings_long, "spendingsperdrink.rds")
