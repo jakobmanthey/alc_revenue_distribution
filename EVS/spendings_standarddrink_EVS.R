@@ -1,9 +1,3 @@
-## To-Do:
-# - Hochrechnungsfaktoren brauchen wir nicht?
-# - Alkoholische Getränke (Käufe im Ausland) abziehen? wenn ja, wie? nicht spezifisch für Getränketype
-# - Personen über 64 werden derzeit nicht berücksichtigt (25%)
-
-
 ### =====================================================================================================================================
 ### Berechnung der durchschnittlichen Ausgaben für eine Alkoholeinheit nach Getränketyp, Einkommensgruppe, Altersgruppe und Trinkgruppe
 ### =====================================================================================================================================
@@ -37,19 +31,29 @@ esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Soziodemographische 
 
 # ==================================================================================================================================================================
 ## 2) DATA PREPARATION
-# ______________________________________________________________________________________________________________________
+# -----------------------------------------------------------------------------------------------------------------------
 
 # 2.1) ESA
 
-#hier aufbereiten: Risikoarm, Riskant, Hoch (Socgruppen)
+# Auswahl der relevanten Spalten (Geschlecht, Alter, Einkommen, Risikoarm(%), Riskant(%), Hoch(%)) für die Einteilung der Trinkgruppen
 
 esa_perctrinkgruppen <- esa_socgruppen_raw %>%
   select("Geschlecht", "Alter", "Einkommen", "Risikoarm", "Riskant", "Hoch")
 
-# =======================================================================================================================
+# Anpassen an EVS
+esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
+  mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen"), labels = c(1, 2, 3)),
+         Sex_new = factor(Geschlecht, levels = c("Male", "Female"), labels = c(1, 2)),
+         Alter_new = factor(sub(" Jahre", "", Alter), levels = c("18-34", "35-59", "60-64")))
+
+# Prozente zu Dezimalzahlen umwandeln
+esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
+  mutate(across(c(Risikoarm, Riskant, Hoch), ~ . / 100))
+
+
+# -----------------------------------------------------------------------------------------------------------------------
 # 2.2) EVS
 
-# =======================================================================================================================
 # Filtern und Umbenennen der relevanten Variablen
 evs <- evs_raw %>%
   rename(ID = "EF3", #HaushaltsID
@@ -134,20 +138,17 @@ evs <- evs_raw %>%
          sprit_likör_wert, sprit_likör_menge, sprit_whisky_wert, sprit_whisky_menge, sprit_branntwein_wert, sprit_branntwein_menge, sprit_anderes_wert,
          sprit_anderes_menge)
  
-# all wein, bier, sprit columns characters. convert to numeric
+# Konvertiere alle Bier-, Wein- und Spirituosenmengen und -ausgaben in numerische Werte
 evs[, grep("wein|bier|sprit", names(evs))] <- sapply(evs[, grep("wein|bier|sprit", names(evs))], as.numeric)
-
-# =======================================================================================================================         
-
-# number of adults in the household
+# ______________________________________________________________________________________________________________________
+## Anzahl der erwachsenen Haushaltsmitglieder berechnen
 evs$N_Haushaltsmitglieder_adult <- evs$N_Haushaltsmitglieder - evs$n_kinder_u1 - evs$n_kinder_1_3 - evs$n_kinder_3_6 - evs$n_kinder_6_12 - evs$n_kinder_12_18
-
-# =======================================================================================================================
+# ______________________________________________________________________________________________________________________
 ## Äquivalenzeinkommen
-# Bedarfsgewichtungsfaktor pro Haushalt berechnen
-# nach neue OECD-Skala: ersten erwachsenen Person im Haushalt: Bedarfsgewicht 1 zugeordnet,
-# für weiteren Haushaltsmitglieder: 0,5 für weitere Personen im Alter von 14 und mehr Jahren
-# und 0,3 für jedes Kind im Alter von unter 14 Jahren)
+# Bedarfsgewichtungsfaktor pro Haushalt berechnen nach neuer OECD-Skala:
+# Bedarfsgewicht 1 für erste erwachsenen Person im Haushalt
+# 0,5 für weitere Personen im Alter von 14 und mehr Jahren
+# 0,3 für jedes Kind im Alter von unter 14 Jahren
 
 berechne_gewichtungsfaktor <- function(row) {
   gewichtung <- 1 # Faktor für Hauptverdiener (pers1)
@@ -159,7 +160,7 @@ berechne_gewichtungsfaktor <- function(row) {
     yob <- row[[pers]]
 #    print(yob)
     if (is.na(yob)) {
-      gewichtung <- gewichtung + 0 # Wenn Geburtsjahr fehlt, addiere 0 zur Gewichtung
+      gewichtung <- gewichtung + 0 # Wenn Geburtsjahr NA (=Person existiert nicht), addiere 0 zur Gewichtung
     } else {
       if (yob <= 2004) {
         gewichtung <- gewichtung + 0.5 # Für Personen <= 2004
@@ -175,19 +176,19 @@ berechne_gewichtungsfaktor <- function(row) {
 evs$gewichtungsfaktor <- apply(evs, 1, berechne_gewichtungsfaktor)
 
 
-# check: show gewichtungsfaktor for rows with N_Haushaltsmitglieder = 2 -> looks good
+# check: Kontrolliere, ob die Gewichtungsfaktoren korrekt berechnet wurden beispielhaft für Haushalte mit 2 Personen
 evs[evs$N_Haushaltsmitglieder == 2, c("N_Haushaltsmitglieder", "gewichtungsfaktor", "yob_pers1", "yob_pers2")]
 
-#calculate equivalized household income
+# Haushaltsnettoeinkommen in Monatseinkommen umrechnen (Original auf Quartalsbasis)
 evs$haushaltsnettoeinkommen_month <- evs$haushaltsnettoeinkommen_quartal/3
 evs$netequincome <- evs$haushaltsnettoeinkommen_month / evs$gewichtungsfaktor
 
 summary(evs$haushaltsnettoeinkommen_month) #median 3496.7
 summary(evs$netequincome) #median 2354
-#laut statistischem bundesamt liegt das mediane äquivalenzeinkommen bei 22713/12 = 1892 euro, dh niedriger als hier
-#evtl. weil hochrechnugnsfaktoren nciht berücksichtigt?
+#laut statistischem bundesamt liegt das median äquivalenzeinkommen bei 22713/12 = 1892 euro
+#evtl. hier erhöht, weil hochrechnugnsfaktoren nciht berücksichtigt?
 
-# =======================================================================================================================
+# ______________________________________________________________________________________________________________________
 #summarize bier, wein, sprit
 evs$Bier_Wert <- evs$bier_untergärig_wert + evs$bier_anderes_wert + evs$bier_misch_wert + evs$bier_ohneBez_wert
 evs$Bier_Menge <- evs$bier_untergärig_menge + evs$bier_anderes_menge + evs$bier_misch_menge + evs$bier_ohneBez_menge
@@ -195,11 +196,10 @@ evs$Wein_Wert <- evs$wein_rot_wert + evs$wein_weiss_wert + evs$wein_rose_wert + 
 evs$Wein_Menge <- evs$wein_rot_menge + evs$wein_weiss_menge + evs$wein_rose_menge + evs$wein_schaum_menge + evs$wein_apfel_menge + evs$wein_frucht_menge + evs$wein_wermut_menge + evs$wein_sherry_menge + evs$wein_portwein_menge + evs$wein_anderes_menge + evs$wein_ohneBez_menge
 evs$Sprit_Wert <- evs$sprit_likör_wert + evs$sprit_whisky_wert + evs$sprit_branntwein_wert + evs$sprit_anderes_wert
 evs$Sprit_Menge <- evs$sprit_likör_menge + evs$sprit_whisky_menge + evs$sprit_branntwein_menge + evs$sprit_anderes_menge
-# =======================================================================================================================
-
+# ______________________________________________________________________________________________________________________
 
 # ==================================================================================================================================================================
-## 3) Berechnungen
+## 3) Berechnungen: gewichtete (nach Anzahl erwachsener Haushaltsmitgleider) Ausgaben pro Standarddrink
 # ______________________________________________________________________________________________________________________
 
 ## gekaufte Mengen und Ausgaben (Wert) nach Anzahl der Haushaltsmitglieder gewichten
@@ -209,7 +209,7 @@ evs <- evs %>%
   mutate(across(all_of(zu_gewichtende_spalten), list(~ . / N_Haushaltsmitglieder_adult), .names = "{.col}_w"))
 
 
-## gekaufte Mengen in l in Standarddrinks (stdd=standarddrinks) umrechnen (0,33l Bier, 0,125l Wein, 0,04l Spirituosen), um Getränketypen bzgl. Alkoholgehalt vergleichbar zu machen
+## gekaufte Mengen (in l) in Standarddrinks (stdd=standarddrinks) umrechnen (0,33l Bier, 0,125l Wein, 0,04l Spirituosen), um Getränketypen bzgl. Alkoholgehalt vergleichbar zu machen
 evs$bier_menge_stdd_w = evs$Bier_Menge_w / 0.33
 evs$wein_menge_stdd_w = evs$Wein_Menge_w / 0.125
 evs$sprit_menge_stdd_w = evs$Sprit_Menge_w / 0.04
@@ -224,7 +224,9 @@ evs$Sprit_Wert_pro_stdd_w <- with(evs, ifelse(sprit_menge_stdd_w != 0, Sprit_Wer
 ## Gesamtmenge an Standarddrinks pro Haushalt (dient als proxy für die Trinkgruppen)
 evs$gesamtmenge_stdd_w = with(evs, bier_menge_stdd_w + wein_menge_stdd_w + sprit_menge_stdd_w)
 #plausi check: plot histogram of gesamtmenge_stdd_w
-hist(evs$gesamtmenge_stdd_w, breaks = 30, xlim = c(0, 400))
+hist(evs$gesamtmenge_stdd_w, breaks = 100, xlim = c(0, 400)) 
+#cases with gesamtmenge_stdd_w = 0
+sum(evs$gesamtmenge_stdd_w == 0)/nrow(evs) # n=2850 Haushalte bzw. 27.5% aller Haushalte kaufen gar kein Alkohol
 
 
 ## Terzile für Nettohaushaltseinkommen -> Bilden der Einkommensgruppen
@@ -251,7 +253,6 @@ summary(evs[evs$Bier_Wert_pro_stdd_w>0, ]$Bier_Wert_pro_stdd_w) #median spending
 
 #show rows that have Bier_Wert_pro_stdd_w < 0.2 but not 0
 evs[evs$Bier_Wert_pro_stdd_w < 0.2 & evs$Bier_Wert_pro_stdd_w != 0, c("N_Haushaltsmitglieder_adult", "Bier_Wert", "Bier_Menge", "Bier_Wert_pro_stdd_w", "Bier_Wert_w", "Bier_Menge_w", "bier_menge_stdd_w")]
-
 #calculation looks good
 #------------------------------------------------------------
 
@@ -287,57 +288,13 @@ table(evs_adultsbis64$altersgruppe, useNA = "ifany")
 prop.table(table(evs_adultsbis64$altersgruppe, useNA = "ifany"))
 
 ## TRINKGRUPPEN bilden
-
 ## = Perzentile für Gesamtmengen an Standarddrinks (proxy für Trinkgruppen) berechnen
-## Notiz: Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen. Geschlecht wird aufgrund der Haushaltebene hier ausgeklammert (wessen Geschlecht?)
-## Perzentilgrenzen erhalten wir NACHTRÄGLICH durch Schätzungen des Epidemiologische Suchtsurvey (ESA)
-## als Ersatz werden hier vorläufig fiktive Perzentilgrenzen generiert
+## Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen (Quelle: Schätzungen des ESA).
 
-
-## Generieren von fiktiven Perzentilen pro EinkommensgruppexAltersgruppe (identifier)
-
-# Identifier für alle Kombinationen von Einkommen und Alter bilden
+# Identifier für alle Kombinationen von Einkommen, Alter und Geschlecht bilden
 evs_adultsbis64$identifier <- paste(evs_adultsbis64$einkommensgruppe, evs_adultsbis64$altersgruppe, evs_adultsbis64$sex, sep = "_")
-
-#adapt esa_perctrinkgruppen to evs_adultsbis64
-esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
-  mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen")),
-         Sex_new = factor(Geschlecht, levels = c("Male", "Female")),
-         Alter_new = factor(Alter, levels = c("18-34 Jahre", "35-59 Jahre", "60-64 Jahre")))
-
-esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
-  mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen"), labels = c(1, 2, 3)),
-         Sex_new = factor(Geschlecht, levels = c("Male", "Female"), labels = c(1, 2)),
-         Alter_new = factor(sub(" Jahre", "", Alter), levels = c("18-34", "35-59", "60-64")))
-#divide by 100 to get decimal values
-esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
-  mutate(across(c(Risikoarm, Riskant, Hoch), ~ . / 100))
-
-
 esa_perctrinkgruppen$identifier <- paste(esa_perctrinkgruppen$Einkommen_new, esa_perctrinkgruppen$Alter_new, esa_perctrinkgruppen$Sex_new, sep = "_")
 
-## -------dieser Teil ist später durch ESA Schätzungen zu ersetzen-------
-# Erstellt Liste von eindeutigen Identifiern (Kombination von Einkommens- und Altersgruppe)
-# um anschließend mittels sapply() für jedes Element Perzentilgrenzen zu generieren
-#identifiers <- unique(evs$identifier)
-
-
-# Funktion zur Generierung von Zufallswerten für untere (perc1) und obere (perc2) Perzentilgrenze
-#generate_random_perc <- function() {
-#  perc1 <- runif(1, min = 0.1, max = 0.9)
-#  perc2 <- runif(1, min = perc1, max = 0.9)  # Stellt sicher, dass perc2 größer als perc1 ist
-#  c(perc1 = perc1, perc2 = perc2)
-#}
-
-# Wendet Funktion 'generate_random_perc' auf jeden identifier an
-# Ergebnis ist Liste von Vektoren mit zufällig generierten Perzentilgrenzen für jede Einkommens- und Altersgruppen-Kombination
-#random_perc <- sapply(identifiers, function(id) generate_random_perc())
-
-# Erstellt DataFrame mit identifiers und den zugehörigen zufällig generierten Perzentilgrenzen
-# t() transponiert den Vektor 'random_perc', sodass jede Zeile die Perzentilgrenzen für eine spezifische Kombination repräsentiert
-#pertentiles_by_strata <- data.frame(identifier = identifiers, t(random_perc), row.names = NULL)
-
-## ----------ENDE Ersatz ESA Daten--------------
 selected_esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   select(identifier, Risikoarm, Riskant, Hoch)
 
