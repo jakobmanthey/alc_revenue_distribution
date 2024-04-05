@@ -10,7 +10,21 @@ In this code, data from two general population surveys (2018 and 2021) are analy
 
 In this code, data from a general population survey (2018) are analysed to provide estimates on alcohol spendings across various groupings (Einkommen x Geschlecht x Alter x Trinkgruppe(ESA)).
 
-Probleme/offene Punkte:
+**Outputfile:**
+
+spendingsperdrink.csv und spendingsperdrink.rds
+
+**Labelling:**
+
+Geschlecht: 1= männlich, 2=weiblich\
+Einkommensgruppe: 1=niedrig, 2=mittel, 3=hoch\
+Trinkgruppe: 1=risikoarm, 2=risikant, 3=hoch
+
+**Variablenbeschreibung:**
+
+avg_wert_pro_stdd_w: durchschnittliche Ausgaben pro Standarddrink in Euro (Standarddrink: 0,33l Bier, 0,125l Wein, 0,04l Spirituose)
+
+**Probleme/offene Punkte bzgl. Berechnung:**
 
 -   mitgelieferte Hochrechnungsfaktoren nicht berücksichtigt
 
