@@ -18,6 +18,13 @@ if (any(installed_packages == FALSE)) {
 # Load packages
 invisible(lapply(packages, library, character.only = TRUE))
 
+# Export des Outputs
+exportdata <- TRUE # TRUE -> resultierende Datafiles werden exportiert
+output_path <- "EVS/Output/" # Pfad für Export der Ergebnisse
+if (!dir.exists(output_path)) {
+  dir.create(output_path)
+}
+
 # ==================================================================================================================================================================
 ## 1) LOAD DATA
 # ______________________________________________________________________________________________________________________
@@ -50,6 +57,26 @@ esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
 esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   mutate(across(c(Risikoarm, Riskant, Hoch), ~ . / 100))
 
+## einschub: plot der verteilung der risikogruppen
+#------------------------------------------------------------
+esa_perctrinkgruppen_long <- esa_perctrinkgruppen %>%
+  pivot_longer(cols = c("Risikoarm", "Riskant", "Hoch"), names_to = "Trinkgruppe", values_to = "Anteil") %>%
+  mutate(Trinkgruppe = factor(Trinkgruppe, levels = c("Risikoarm", "Riskant", "Hoch")))
+
+# anteil risikogruppen nach geschlecht und alter -> kaum unterschiede zwischen geschlechtern?
+ggplot(esa_perctrinkgruppen_long, aes(x = Trinkgruppe, y = Anteil, fill = Alter)) +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge") +
+  facet_wrap(~Geschlecht) +
+  labs(title = "Verteilung der Trinkgruppen nach Alter und Geschlecht (unter Konsumierenden)",
+       y = "Anteil", x = "Trinkgruppe") +
+  theme_minimal()
+
+# nur hochrisikogruppe - vor allem ältere männer, unter jungen frauen und jungen männern ähnlich hoch?!
+ggplot(esa_perctrinkgruppen, aes(x = Geschlecht, y = Hoch, fill = Alter)) +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge") +
+  labs(title = "Anteil mit Hochrisikonsum nach Alter und Geschlecht (unter Konsumierenden)",
+       y = "Anteil", x = "Geschlecht") +
+  theme_minimal()
 
 # -----------------------------------------------------------------------------------------------------------------------
 # 2.2) EVS
@@ -307,8 +334,8 @@ prop.table(table(evs_adultsbis64$altersgruppe, useNA = "ifany"))
 
 #______________________________________________________________________________________________________________________
 # 4.2) TRINKGRUPPEN bilden
-## = Perzentile für Gesamtmengen an Standarddrinks (proxy für Trinkgruppen) berechnen
-## Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen (Quelle: Schätzungen des ESA)
+## = Wert X Gesamtmengen an Standarddrinks (proxy für Trinkgruppen) für Perzentilgrenze Y für  berechnen
+## Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen und wurden basierend auf ESA-Daten berechnet
 
 # Identifier für alle Kombinationen von Einkommen, Alter und Geschlecht bilden
 evs_adultsbis64$identifier <- paste(evs_adultsbis64$einkommensgruppe, evs_adultsbis64$altersgruppe, evs_adultsbis64$sex, sep = "_")
@@ -317,7 +344,7 @@ esa_perctrinkgruppen$identifier <- paste(esa_perctrinkgruppen$Einkommen_new, esa
 selected_esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   select(identifier, Risikoarm, Riskant, Hoch)
 
-# Fusioniert 'pertentiles_by_strata' mit 'evs_bis64' basierend auf der Spalte 'identifier'
+# Ordnet die Perzentilgrenzen aus ESA den entsprechenden Gruppen in EVS zu basierend auf der Spalte 'identifier'
 evs_bis64_strata <- merge(selected_esa_perctrinkgruppen, evs_adultsbis64, by = c("identifier"), all.x = TRUE)
 
 # Zunächst wird nach identifier gruppiert um so nach strata die Werte der entspechenden 
@@ -327,15 +354,72 @@ evs_bis64_strata <- merge(selected_esa_perctrinkgruppen, evs_adultsbis64, by = c
 evs_bis64_strata_trinkgruppe <- evs_bis64_strata %>%
   filter(gesamtmenge_stdd_w > 0) %>% #nur Haushalte mit gekauften Getränken (nur "Konsumierende")
   group_by(identifier) %>%
-  mutate(Risikoarm_p = quantile(gesamtmenge_stdd_w, Risikoarm),
-         Riskant_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant))) %>%
+  mutate(Risikoarm_p = quantile(gesamtmenge_stdd_w, Risikoarm), #berechnet Gesamtmenge an standarddrinks an stellle perzentilgrenze (ESA) für jede Gruppe
+         Riskant_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant)),
+         Gefährlich_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant+Hoch))) %>% 
   ungroup() %>%
   # weist jeder Zeile in 'evs_bis64_strata' eine Trinkgruppe zu basierend auf den berechneten Perzentilen
   mutate(trinkgruppe = case_when(
-    gesamtmenge_stdd_w <= Risikoarm_p ~ 1, 
-    gesamtmenge_stdd_w <= Riskant_p ~ 2,
-    gesamtmenge_stdd_w > Riskant_p ~ 3,
-    TRUE ~ NA)) #fallback falls keine der Bedingungen zutrifft
+    gesamtmenge_stdd_w <= Risikoarm_p ~ "risikoarm", #wenn gesamtmenge kleiner als perzentilgrenze für Risikoarm
+    gesamtmenge_stdd_w <= Riskant_p ~ "riskant", #wenn gesamtmenge kleiner als perzentilgrenze für Riskant_p
+    gesamtmenge_stdd_w > Riskant_p ~ "hochriskant", #wenn gesamtmenge größer als perzentilgrenze für Riskant_p
+    TRUE ~ NA)) %>% #fallback falls keine der Bedingungen zutrifft
+  mutate(trinkgruppe = factor(trinkgruppe, levels = c("risikoarm", "riskant", "hochriskant"))) %>% #sortierung der Trinkgruppen
+  mutate(
+    Bier_Wert_pro_stdd_w = ifelse(Bier_Wert_pro_stdd_w == 0, NA, Bier_Wert_pro_stdd_w), #setze 0 (entsteht, wenn keine Käufe) auf NA, um zu verhindern dass 0 in mean() einfließt
+    Wein_Wert_pro_stdd_w = ifelse(Wein_Wert_pro_stdd_w == 0, NA, Wein_Wert_pro_stdd_w),
+    Sprit_Wert_pro_stdd_w = ifelse(Sprit_Wert_pro_stdd_w == 0, NA, Sprit_Wert_pro_stdd_w)
+  ) 
+
+# check der ergebnisse vor aggregation
+table(evs_bis64_strata_trinkgruppe$trinkgruppe, useNA = "ifany") #okay, no NAs
+
+ggplot(evs_bis64_strata_trinkgruppe, aes(x = trinkgruppe, y = gesamtmenge_stdd_w)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(0, 400)) #plausibel, da die Grenzen für die Trinkgruppen auf Basis der Gesamtmenge an Standarddrinks berechnet wurden
+# plot by beverage type
+# pivot data to long format
+evs_bis64_strata_trinkgruppe_long <- evs_bis64_strata_trinkgruppe %>%
+  pivot_longer(cols = starts_with(c("Bier_Wert_pro_stdd_w", "Wein_Wert_pro_stdd_w", "Sprit_Wert_pro_stdd_w")),
+               names_to = "original_column_name") %>% 
+  separate(original_column_name, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
+  pivot_wider(names_from = stat_type, values_from = value) %>%
+  mutate(einkommensgruppe = factor(einkommensgruppe, labels = c("niedriges Einkommen", "mittleres Einkommen", "hohes Einkommen")))
+
+ggplot(evs_bis64_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd_w, fill = trinkgruppe)) +
+  stat_halfeye(
+    # adjust bandwidth
+    adjust = 0.4,
+    # move to the right
+    justification = -0.1,
+    # remove the slub interval
+    .width = 0,
+    point_colour = NA
+  ) +
+  stat_dots(
+    # ploting on left side
+    side = "right",
+    # adjusting position
+    justification = 0.3,
+    alpha = 0.2,
+    # adjust grouping (binning) of observations
+    binwidth = unit(c(1, Inf), "mm"), overflow = "compress"
+    #stackratio = 0.5
+  ) +
+  geom_boxplot(
+    width = 0.12,
+    # removing outliers
+    outlier.color = NA,
+    alpha = 0.5
+  ) +
+  facet_grid(beverage_type ~ einkommensgruppe, scales = "free_y") +
+  labs(title = "Verteilung der Ausgaben pro Standarddrink nach Getränketyp, Einkommen und Trinkgruppe",
+       subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein)",
+       y = "Ausgaben pro Standarddrink (€)", x = "Trinkgruppe") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE)), breaks = seq(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE), 0.1))
+
+
 
 #______________________________________________________________________________________________________________________
 # 4.3) Ausgaben pro Standarddrink mit Konfidenzintervallen (pro Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe - Stratum)
@@ -363,11 +447,6 @@ mean_ci_high <- function(x, conf = 0.95, na.rm = FALSE) {
 # Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe)
 
 aggregated_spendings <- evs_bis64_strata_trinkgruppe %>%
-  mutate(
-    Bier_Wert_pro_stdd_w = ifelse(Bier_Wert_pro_stdd_w == 0, NA, Bier_Wert_pro_stdd_w), #setze 0 auf NA, um zu verhindern dass 0 in mean() einfließt
-    Wein_Wert_pro_stdd_w = ifelse(Wein_Wert_pro_stdd_w == 0, NA, Wein_Wert_pro_stdd_w),
-    Sprit_Wert_pro_stdd_w = ifelse(Sprit_Wert_pro_stdd_w == 0, NA, Sprit_Wert_pro_stdd_w)
-  ) %>%
   group_by(trinkgruppe, einkommensgruppe, altersgruppe, sex) %>%
   summarize(
     bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
@@ -390,7 +469,12 @@ aggregated_spendings_long <- aggregated_spendings %>%
   separate(original_column, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
   pivot_wider(names_from = stat_type, values_from = value)
 
-# Ergebnisse als csv 
-write.csv(aggregated_spendings_long, "spendingsperdrink.csv")
-# und als RDS ausgeben lassen
-saveRDS(aggregated_spendings_long, "spendingsperdrink.rds")
+# Exportiere Ergebnisse als csv und RDS
+if (exportdata == TRUE) {
+  # Ergebnisse als csv 
+  write.csv(aggregated_spendings_long, file.path(output_path, "spendingsperdrink.csv"))
+  # und als RDS ausgeben lassen
+  saveRDS(aggregated_spendings_long, file.path(output_path, "spendingsperdrink.rds"))
+} else {
+  print("no data exported")
+}
