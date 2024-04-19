@@ -19,6 +19,7 @@ if (any(installed_packages == FALSE)) {
 invisible(lapply(packages, library, character.only = TRUE))
 
 # Export des Outputs
+print(getwd())
 exportdata <- TRUE # TRUE -> resultierende Datafiles werden exportiert
 output_path <- "EVS/Output/" # Pfad für Export der Ergebnisse
 if (!dir.exists(output_path)) {
@@ -51,7 +52,7 @@ esa_perctrinkgruppen <- esa_socgruppen_raw %>%
 esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen"), labels = c(1, 2, 3)),
          Sex_new = factor(Geschlecht, levels = c("Male", "Female"), labels = c(1, 2)),
-         Alter_new = factor(sub(" Jahre", "", Alter), levels = c("18-34", "35-59", "60-64")))
+         Alter_new = factor(sub(" Jahre", "", Alter), labels = c("18-34", "35-59", "60+")))
 
 # Prozente zu Dezimalzahlen umwandeln
 esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
@@ -63,12 +64,14 @@ esa_perctrinkgruppen_long <- esa_perctrinkgruppen %>%
   pivot_longer(cols = c("Risikoarm", "Riskant", "Hoch"), names_to = "Trinkgruppe", values_to = "Anteil") %>%
   mutate(Trinkgruppe = factor(Trinkgruppe, levels = c("Risikoarm", "Riskant", "Hoch")))
 
-# anteil risikogruppen nach geschlecht und alter -> kaum unterschiede zwischen geschlechtern?
-perc_trgr_sexage <- ggplot(esa_perctrinkgruppen_long, aes(x = Trinkgruppe, y = Anteil, fill = Alter)) +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge") +
-  facet_wrap(~Geschlecht) +
-  labs(title = "Verteilung der Trinkgruppen nach Alter und Geschlecht (unter Konsumierenden)",
-       y = "Anteil", x = "Trinkgruppe") +
+# anteil risikogruppen nach geschlecht, alter, einkommen -> kaum unterschiede zwischen geschlechtern?
+perc_trgr_sexageincome <- ggplot(esa_perctrinkgruppen_long, aes(x = Alter, y = Anteil, fill = Trinkgruppe)) +
+  geom_bar(position = "stack", stat = "identity") +
+  facet_grid(Einkommen~Geschlecht) +
+  scale_fill_manual(values = c("Risikoarm" = "#FFCCCC", "Riskant" = "#FF6666", "Hoch" = "#8B0000")) +
+  labs(title = "ESA: Verteilung der Trinkgruppen",
+       subtitle = "nach Alter, Geschlecht und Einkommen (unter Konsumierenden)",
+       y = "Anteil", x = "Altersgruppe") +
   theme_minimal()
 
 # nur hochrisikogruppe - vor allem ältere männer, unter jungen frauen und jungen männern ähnlich hoch?!
@@ -79,7 +82,7 @@ perc_highrisk_sexage <- ggplot(esa_perctrinkgruppen, aes(x = Geschlecht, y = Hoc
   theme_minimal()
 
 if (exportdata == TRUE) {
-  ggsave(file.path(output_path, "perc_trgr_sexage.png"), perc_trgr_sexage, width = 10, height = 6, units = "in")
+  ggsave(file.path(output_path, "perc_trgr_sexageincome.png"), perc_trgr_sexageincome, width = 10, height = 6, units = "in")
   ggsave(file.path(output_path, "perc_highrisk_sexage.png"), perc_highrisk_sexage, width = 6, height = 6, units = "in")
 }
 
@@ -89,29 +92,21 @@ if (exportdata == TRUE) {
 # Filtern und Umbenennen der relevanten Variablen
 evs <- evs_raw %>%
   rename(ID = "EF3", #HaushaltsID
-         N_Haushaltsmitglieder = "EF7", #Anzahl Personen im Haushalt, Wie Personen <18 Jahren identifizieren und exkludieren?
-         Stellung_pers1 = "EF8u1", #Stellung im Haushalt Person 1 = Haupteinkommensbezieher
-         sex_pers1 = "EF8u2", #Geschlecht Person 1
+         N_Haushaltsmitglieder = "EF7", #Anzahl Personen im Haushalt
+         sex_pers1 = "EF8u2", #Geschlecht Person 1 (Pers 1 ist immer Haupteinkommensbezieher)
          yob_pers1 = "EF8u3", #Alter Person 1
-         Stellung_pers2 = "EF9u1", #Stellung im Haushalt Person 2
          sex_pers2 = "EF9u2", #Geschlecht Person 2
          yob_pers2 = "EF9u3", #Alter Person 2
-         Stellung_pers3 = "EF10u1", #Stellung im Haushalt Person 3
          sex_pers3 = "EF10u2", #Geschlecht Person 3
          yob_pers3 = "EF10u3", #Alter Person 3
-         Stellung_pers4 = "EF11u1",
          sex_pers4 = "EF11u2",
          yob_pers4 = "EF11u3",
-         Stellung_pers5 = "EF12u1",
          sex_pers5 = "EF12u2",
          yob_pers5 = "EF12u3",
-         Stellung_pers6 = "EF13u1",
          sex_pers6 = "EF13u2",
          yob_pers6 = "EF13u3",
-         Stellung_pers7 = "EF14u1",
          sex_pers7 = "EF14u2",
          yob_pers7 = "EF14u3",
-         Stellung_pers8 = "EF15u1",
          sex_pers8 = "EF15u2",
          yob_pers8 = "EF15u3",
          n_kinder_u1 = "EF22", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt unter 1 Jahr
@@ -160,8 +155,8 @@ evs <- evs_raw %>%
          sprit_branntwein_menge = "EF270u1", #Menge des gekauften Branntweins
          sprit_anderes_wert = "EF271u2", #ausgegebener Betrag für andere Spirituosen  (z.B. Rum, Wodka, Korn, ...) mehr als 6% Alkohol
          sprit_anderes_menge = "EF271u1") %>% #Menge der gekauften anderen Spirituosen 
-  select(ID, N_Haushaltsmitglieder, Stellung_pers1, sex_pers1, yob_pers1, Stellung_pers2, yob_pers2, sex_pers2, Stellung_pers3, yob_pers3, sex_pers3, Stellung_pers4,
-         yob_pers4, sex_pers4, Stellung_pers5, yob_pers5, sex_pers5, Stellung_pers6, yob_pers6, sex_pers6, Stellung_pers7, yob_pers7, sex_pers7, Stellung_pers8, yob_pers8, sex_pers8, n_kinder_u1, n_kinder_1_3,
+  select(ID, N_Haushaltsmitglieder, sex_pers1, yob_pers1, yob_pers2, sex_pers2, yob_pers3, sex_pers3,
+         yob_pers4, sex_pers4, yob_pers5, sex_pers5, yob_pers6, sex_pers6, yob_pers7, sex_pers7, yob_pers8, sex_pers8, n_kinder_u1, n_kinder_1_3,
          n_kinder_3_6, n_kinder_6_12, n_kinder_12_18, haushaltsnettoeinkommen_quartal, bier_untergärig_wert, bier_untergärig_menge, bier_anderes_wert,
          bier_anderes_menge, bier_misch_wert, bier_misch_menge, bier_ohneBez_wert, bier_ohneBez_menge, mischgetraenke_wert, mischgetraenke_menge,
          wein_rot_wert, wein_rot_menge, wein_weiss_wert, wein_weiss_menge, wein_rose_wert, wein_rose_menge, wein_schaum_wert, wein_schaum_menge,
@@ -227,19 +222,18 @@ evs$einkommensgruppe <- cut(evs$netequincome, #neue Spalte mit Einkommensgruppen
                             breaks = terzile_einkommen_grenzen,
                             labels = c(1, 2, 3), include.lowest = TRUE)
 
+# ==================================================================================================================================================================
+## 3) Berechnungen: gewichtete (nach Anzahl erwachsener Haushaltsmitgleider) Ausgaben pro Standarddrink auf Haushaltsebene
 # ______________________________________________________________________________________________________________________
-#summarize bier, wein, sprit
+
+## summarize bier, wein, sprit
 evs$Bier_Wert <- evs$bier_untergärig_wert + evs$bier_anderes_wert + evs$bier_misch_wert + evs$bier_ohneBez_wert
 evs$Bier_Menge <- evs$bier_untergärig_menge + evs$bier_anderes_menge + evs$bier_misch_menge + evs$bier_ohneBez_menge
 evs$Wein_Wert <- evs$wein_rot_wert + evs$wein_weiss_wert + evs$wein_rose_wert + evs$wein_schaum_wert + evs$wein_apfel_wert + evs$wein_frucht_wert + evs$wein_wermut_wert + evs$wein_sherry_wert + evs$wein_portwein_wert + evs$wein_anderes_wert + evs$wein_ohneBez_wert
 evs$Wein_Menge <- evs$wein_rot_menge + evs$wein_weiss_menge + evs$wein_rose_menge + evs$wein_schaum_menge + evs$wein_apfel_menge + evs$wein_frucht_menge + evs$wein_wermut_menge + evs$wein_sherry_menge + evs$wein_portwein_menge + evs$wein_anderes_menge + evs$wein_ohneBez_menge
 evs$Sprit_Wert <- evs$sprit_likör_wert + evs$sprit_whisky_wert + evs$sprit_branntwein_wert + evs$sprit_anderes_wert
 evs$Sprit_Menge <- evs$sprit_likör_menge + evs$sprit_whisky_menge + evs$sprit_branntwein_menge + evs$sprit_anderes_menge
-# ______________________________________________________________________________________________________________________
 
-# ==================================================================================================================================================================
-## 3) Berechnungen: gewichtete (nach Anzahl erwachsener Haushaltsmitgleider) Ausgaben pro Standarddrink auf Haushaltsebene
-# ______________________________________________________________________________________________________________________
 
 ## gekaufte Mengen und Ausgaben (Wert) nach Anzahl der Haushaltsmitglieder gewichten
 zu_gewichtende_spalten <- c("Bier_Wert", "Wein_Wert", "Sprit_Wert", "Bier_Menge", "Wein_Menge", "Sprit_Menge")
@@ -259,18 +253,6 @@ evs$sprit_menge_stdd_w = evs$Sprit_Menge_w / 0.04
 evs$Bier_Wert_pro_stdd_w <- with(evs, ifelse(bier_menge_stdd_w != 0, Bier_Wert_w / bier_menge_stdd_w, 0))
 evs$Wein_Wert_pro_stdd_w <- with(evs, ifelse(wein_menge_stdd_w != 0, Wein_Wert_w / wein_menge_stdd_w, 0))
 evs$Sprit_Wert_pro_stdd_w <- with(evs, ifelse(sprit_menge_stdd_w != 0, Sprit_Wert_w / sprit_menge_stdd_w, 0))
-
-## Gesamtmenge an Standarddrinks pro Haushalt (dient als proxy für die Trinkgruppen)
-evs$gesamtmenge_stdd_w = with(evs, bier_menge_stdd_w + wein_menge_stdd_w + sprit_menge_stdd_w)
-#plausi check: plot histogram der gesamtmenge_stdd_w
-hist_gesamtmenge_stdd_w <- hist(evs$gesamtmenge_stdd_w, breaks = 200, xlim = c(0, 400), main = "Histogram of total standard drinks per household\n(weighted by N adult household members, per month)", xlab = "Total standard drinks per household", ylab = "Frequency")
-summary(evs$gesamtmenge_stdd_w) #max: 1091, median: 15, mean: 33
-#cases with gesamtmenge_stdd_w = 0
-sum(evs$gesamtmenge_stdd_w == 0)/nrow(evs) # n=2850 Haushalte bzw. 27.5% aller Haushalte kaufen gar kein Alkohol
-
-#if (exportdata == TRUE) {
-#  ggsave(file.path(output_path, "hist_gesamtmenge_stdd_w.png"), hist_gesamtmenge_stdd_w)
-#}
 
 #------------------------------------------------------------
 #plausi checks der Ausgaben pro stddrink
@@ -304,7 +286,7 @@ spendingsstdd_dist_bybevtype <- ggplot(evs_long_tmp, aes(x = getraenketyp, y = a
   geom_jitter(width = 0.45, size = 0.2, alpha=0.2) +
   scale_x_discrete(labels = c("Wein_Wert_pro_stdd_w" = "Wein", "Bier_Wert_pro_stdd_w" = "Bier", "Sprit_Wert_pro_stdd_w" = "Spirituosen")) +
   labs(title = "Verteilung der Ausgaben pro Standarddrink nach Getränketyp",
-       subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein)",
+       subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein, y-Achse begrenzt bis 95. Perzentil)",
        y = "Ausgaben pro Standarddrink (€)", x = "Getränketyp") +
   theme_minimal() +
   scale_y_continuous(limits = c(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95)), breaks = seq(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95), 0.1))
@@ -327,49 +309,79 @@ calculate_age <- function(year_of_birth) {
 
 evs_long$age <- calculate_age(evs_long$yob)
 
-# nur Erwachsene zwischen 18 und 64 Jahren berücksichtigen
-evs_adultsbis64 <- evs_long %>%
-  filter(age >= 18 & age <= 64) 
+# nur Erwachsene ab 18 berücksichtigen
+evs_adults <- evs_long %>%
+  filter(age >= 18) 
 
 
-evs_adultsbis64 <- evs_adultsbis64 %>%
+evs_adults <- evs_adults %>%
   mutate(altersgruppe = case_when(
     age >= 18 & age <= 34 ~ "18-34",
     age >= 35 & age <= 59 ~ "35-59",
-    age >= 60 & age <= 64 ~ "60-64",
+    age >= 60 ~ "60+",
     TRUE ~ NA_character_ #Fallback falls keine der Bedingungen zutrifft
   ))
 
-table(evs_adultsbis64$altersgruppe, useNA = "ifany")
-prop.table(table(evs_adultsbis64$altersgruppe, useNA = "ifany"))
+table(evs_adults$altersgruppe, useNA = "ifany")
+prop.table(table(evs_adults$altersgruppe, useNA = "ifany"))
 
 #______________________________________________________________________________________________________________________
 # 4.2) TRINKGRUPPEN bilden
 ## = Wert X Gesamtmengen an Standarddrinks (proxy für Trinkgruppen) für Perzentilgrenze Y für  berechnen
 ## Perzentilgrenzen variieren je nach Geschlecht, Alter und Einkommen und wurden basierend auf ESA-Daten berechnet
 
+
+## Gesamtmenge an Standarddrinks pro Haushalt (dient als proxy für die Trinkgruppen)
+evs_adults$gesamtmenge_stdd_w = with(evs_adults, bier_menge_stdd_w + wein_menge_stdd_w + sprit_menge_stdd_w)
+#plausi check: plot histogram der gesamtmenge_stdd_w
+hist_gesamtmenge_stdd_w <- hist(evs_adults$gesamtmenge_stdd_w, breaks = 200, xlim = c(0, 400), main = "(Gekaufte) Menge an Standarddrinks, pro Monat)", xlab = "Menge an Standarddrinks pro Person", ylab = "Häufigkeit")
+
+#plot histogram of gesamtmenge_stdd_w by sex, age, income
+ggplot(filter(evs_adults, gesamtmenge_stdd_w > 0), aes(x = gesamtmenge_stdd_w, fill = as.factor(sex))) +
+  geom_histogram(bins = 60, position = "identity", alpha = 0.5) +
+  facet_grid(altersgruppe ~ einkommensgruppe, labeller = labeller(einkommensgruppe = c("1" = "niedriges Einkommen", "2" = "mittleres Einkommen", "3" = "hohes Einkommen"))) +
+  scale_y_continuous(limits = c(0, 70)) +
+  scale_x_continuous(limits = c(0, quantile(evs_adults$gesamtmenge_stdd_w, 0.95))) +
+  scale_fill_discrete(labels = c("männlich", "weiblich")) +
+  labs(title = "(Gekaufte) Menge an Standarddrinks nach Geschlecht, Alter und Einkommen",
+       subtitle = "pro Monat, ausgeschlossen Fälle mit 0 gekauften Getränken",
+       x = "Menge an Standarddrinks pro Person",
+       y = "Häufigkeit",
+       fill = "Geschlecht") +
+  theme_minimal()
+
+summary(evs_adults$gesamtmenge_stdd_w) #max: 1091, median: 17, mean: 33
+#cases with gesamtmenge_stdd_w = 0
+sum(evs_adults$gesamtmenge_stdd_w == 0) # n=4443 Personen bzw.
+sum(evs_adults$gesamtmenge_stdd_w == 0)/nrow(evs_adults) # 25% aller Personen kaufen kein Alkohol
+
+#if (exportdata == TRUE) {
+#  ggsave(file.path(output_path, "hist_gesamtmenge_stdd_w.png"), hist_gesamtmenge_stdd_w)
+#}
+
+
 # Identifier für alle Kombinationen von Einkommen, Alter und Geschlecht bilden
-evs_adultsbis64$identifier <- paste(evs_adultsbis64$einkommensgruppe, evs_adultsbis64$altersgruppe, evs_adultsbis64$sex, sep = "_")
+evs_adults$identifier <- paste(evs_adults$einkommensgruppe, evs_adults$altersgruppe, evs_adults$sex, sep = "_")
 esa_perctrinkgruppen$identifier <- paste(esa_perctrinkgruppen$Einkommen_new, esa_perctrinkgruppen$Alter_new, esa_perctrinkgruppen$Sex_new, sep = "_")
 
 selected_esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   select(identifier, Risikoarm, Riskant, Hoch)
 
 # Ordnet die Perzentilgrenzen aus ESA den entsprechenden Gruppen in EVS zu basierend auf der Spalte 'identifier'
-evs_bis64_strata <- merge(selected_esa_perctrinkgruppen, evs_adultsbis64, by = c("identifier"), all.x = TRUE)
+evs_strata <- merge(selected_esa_perctrinkgruppen, evs_adults, by = c("identifier"), all.x = TRUE)
 
 # Zunächst wird nach identifier gruppiert um so nach strata die Werte der entspechenden 
 # Perzentile zu errechnen. Für jeden Haushalt wird dann die Gesamtmenge mit den 
 # jeweiligen Grenzwerten verglichen und eine Gruppeneinteilung (Trinkgruppen) vorgenommen
 
-evs_bis64_strata_trinkgruppe <- evs_bis64_strata %>%
+evs_strata_trinkgruppe <- evs_strata %>%
   filter(gesamtmenge_stdd_w > 0) %>% #nur Haushalte mit gekauften Getränken (nur "Konsumierende")
   group_by(identifier) %>%
   mutate(Risikoarm_p = quantile(gesamtmenge_stdd_w, Risikoarm), #berechnet Gesamtmenge an standarddrinks an stellle perzentilgrenze (ESA) für jede Gruppe
          Riskant_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant)),
          Gefährlich_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant+Hoch))) %>% 
   ungroup() %>%
-  # weist jeder Zeile in 'evs_bis64_strata' eine Trinkgruppe zu basierend auf den berechneten Perzentilen
+  # weist jeder Zeile in 'evs_strata' eine Trinkgruppe zu basierend auf den berechneten Perzentilen
   mutate(trinkgruppe = case_when(
     gesamtmenge_stdd_w <= Risikoarm_p ~ "risikoarm", #wenn gesamtmenge kleiner als perzentilgrenze für Risikoarm
     gesamtmenge_stdd_w <= Riskant_p ~ "riskant", #wenn gesamtmenge kleiner als perzentilgrenze für Riskant_p
@@ -383,53 +395,43 @@ evs_bis64_strata_trinkgruppe <- evs_bis64_strata %>%
   ) 
 
 # check der ergebnisse vor aggregation
-table(evs_bis64_strata_trinkgruppe$trinkgruppe, useNA = "ifany") #okay, no NAs
+table(evs_strata_trinkgruppe$trinkgruppe, useNA = "ifany") #okay, no NAs
 
-ggplot(evs_bis64_strata_trinkgruppe, aes(x = trinkgruppe, y = gesamtmenge_stdd_w)) +
+ggplot(evs_strata_trinkgruppe, aes(x = trinkgruppe, y = gesamtmenge_stdd_w)) +
   geom_boxplot() +
   scale_y_continuous(limits = c(0, 400)) #plausibel, da die Grenzen für die Trinkgruppen auf Basis der Gesamtmenge an Standarddrinks berechnet wurden
 # plot by beverage type
 # pivot data to long format
-evs_bis64_strata_trinkgruppe_long <- evs_bis64_strata_trinkgruppe %>%
+evs_strata_trinkgruppe_long <- evs_strata_trinkgruppe %>%
   pivot_longer(cols = starts_with(c("Bier_Wert_pro_stdd_w", "Wein_Wert_pro_stdd_w", "Sprit_Wert_pro_stdd_w")),
                names_to = "original_column_name") %>% 
   separate(original_column_name, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
   pivot_wider(names_from = stat_type, values_from = value) %>%
   mutate(einkommensgruppe = factor(einkommensgruppe, labels = c("niedriges Einkommen", "mittleres Einkommen", "hohes Einkommen")))
 
-ggplot(evs_bis64_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd_w, fill = trinkgruppe)) +
-#  stat_halfeye(
-#    # adjust bandwidth
-#    adjust = 0.4,
-    # move to the right
-#    justification = -0.1,
-    # remove the slub interval
-#    .width = 0,
-#    point_colour = NA
-#  ) +
-  stat_dots(
-    # ploting on left side
-    side = "right",
-    # adjusting position
-    justification = 0.3,
-    alpha = 0.2,
+#ggplot(evs_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd_w, fill = trinkgruppe)) +
+#  stat_dots(
+#    # ploting on left side
+#    side = "right",
+#    # adjusting position
+#    justification = 0.3,
+#    alpha = 0.2,
     # adjust grouping (binning) of observations
-    binwidth = unit(c(1, Inf), "mm"), overflow = "compress"
+#    binwidth = unit(c(1, Inf), "mm"), overflow = "compress"
     #stackratio = 0.5
-  ) +
-  geom_boxplot(
-    width = 0.12,
+#  ) +
+#  geom_boxplot(
+#    width = 0.12,
     # removing outliers
-    outlier.color = NA,
-    alpha = 0.5
-  ) +
+#    outlier.color = NA,
+#    alpha = 0.5
+#  ) +
+#  scale_y_continuous(limits = c(0, 3.5)) +
 #  facet_grid(beverage_type ~ einkommensgruppe, scales = "free_y") +
-  labs(title = "Verteilung der Ausgaben pro Standarddrink nach Trinkgruppe",
-       subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein)",
-       y = "Ausgaben pro Standarddrink (€)", x = "Trinkgruppe") +
-  theme_minimal()
-#  scale_y_continuous(limits = c(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE)), breaks = seq(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE), 0.1))
-
+#  labs(title = "Verteilung der Ausgaben pro Standarddrink nach Trinkgruppe",
+#       subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein)",
+#       y = "Ausgaben pro Standarddrink (€)", x = "Trinkgruppe") +
+#  theme_minimal() 
 
 
 #______________________________________________________________________________________________________________________
@@ -457,7 +459,7 @@ mean_ci_high <- function(x, conf = 0.95, na.rm = FALSE) {
 
 # Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe)
 
-aggregated_spendings <- evs_bis64_strata_trinkgruppe %>%
+aggregated_spendings <- evs_strata_trinkgruppe %>%
   group_by(trinkgruppe, einkommensgruppe, altersgruppe, sex) %>%
   summarize(
     bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
