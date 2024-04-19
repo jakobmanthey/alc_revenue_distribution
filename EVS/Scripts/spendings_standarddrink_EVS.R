@@ -8,7 +8,7 @@
 # clean workspace
 rm(list=ls())
 
-packages <- c("tidyverse", "readxl", "ggdist") 
+packages <- c("tidyverse", "readxl", "ggdist", "knitr") 
 
 # Install packages not yet installed
 installed_packages <- packages %in% rownames(installed.packages())
@@ -64,7 +64,7 @@ esa_perctrinkgruppen_long <- esa_perctrinkgruppen %>%
   mutate(Trinkgruppe = factor(Trinkgruppe, levels = c("Risikoarm", "Riskant", "Hoch")))
 
 # anteil risikogruppen nach geschlecht und alter -> kaum unterschiede zwischen geschlechtern?
-ggplot(esa_perctrinkgruppen_long, aes(x = Trinkgruppe, y = Anteil, fill = Alter)) +
+perc_trgr_sexage <- ggplot(esa_perctrinkgruppen_long, aes(x = Trinkgruppe, y = Anteil, fill = Alter)) +
   stat_summary(fun = "mean", geom = "bar", position = "dodge") +
   facet_wrap(~Geschlecht) +
   labs(title = "Verteilung der Trinkgruppen nach Alter und Geschlecht (unter Konsumierenden)",
@@ -72,11 +72,16 @@ ggplot(esa_perctrinkgruppen_long, aes(x = Trinkgruppe, y = Anteil, fill = Alter)
   theme_minimal()
 
 # nur hochrisikogruppe - vor allem ältere männer, unter jungen frauen und jungen männern ähnlich hoch?!
-ggplot(esa_perctrinkgruppen, aes(x = Geschlecht, y = Hoch, fill = Alter)) +
+perc_highrisk_sexage <- ggplot(esa_perctrinkgruppen, aes(x = Geschlecht, y = Hoch, fill = Alter)) +
   stat_summary(fun = "mean", geom = "bar", position = "dodge") +
   labs(title = "Anteil mit Hochrisikonsum nach Alter und Geschlecht (unter Konsumierenden)",
        y = "Anteil", x = "Geschlecht") +
   theme_minimal()
+
+if (exportdata == TRUE) {
+  ggsave(file.path(output_path, "perc_trgr_sexage.png"), perc_trgr_sexage, width = 10, height = 6, units = "in")
+  ggsave(file.path(output_path, "perc_highrisk_sexage.png"), perc_highrisk_sexage, width = 6, height = 6, units = "in")
+}
 
 # -----------------------------------------------------------------------------------------------------------------------
 # 2.2) EVS
@@ -258,9 +263,14 @@ evs$Sprit_Wert_pro_stdd_w <- with(evs, ifelse(sprit_menge_stdd_w != 0, Sprit_Wer
 ## Gesamtmenge an Standarddrinks pro Haushalt (dient als proxy für die Trinkgruppen)
 evs$gesamtmenge_stdd_w = with(evs, bier_menge_stdd_w + wein_menge_stdd_w + sprit_menge_stdd_w)
 #plausi check: plot histogram der gesamtmenge_stdd_w
-hist(evs$gesamtmenge_stdd_w, breaks = 100, xlim = c(0, 400)) 
+hist_gesamtmenge_stdd_w <- hist(evs$gesamtmenge_stdd_w, breaks = 200, xlim = c(0, 400), main = "Histogram of total standard drinks per household\n(weighted by N adult household members, per month)", xlab = "Total standard drinks per household", ylab = "Frequency")
+summary(evs$gesamtmenge_stdd_w) #max: 1091, median: 15, mean: 33
 #cases with gesamtmenge_stdd_w = 0
 sum(evs$gesamtmenge_stdd_w == 0)/nrow(evs) # n=2850 Haushalte bzw. 27.5% aller Haushalte kaufen gar kein Alkohol
+
+#if (exportdata == TRUE) {
+#  ggsave(file.path(output_path, "hist_gesamtmenge_stdd_w.png"), hist_gesamtmenge_stdd_w)
+#}
 
 #------------------------------------------------------------
 #plausi checks der Ausgaben pro stddrink
@@ -288,7 +298,7 @@ evs_long_tmp <- evs %>%
   filter(ausgaben_pro_stdd > 0) #nur Haushalte mit gekauften Getränken
 
 # plot Verteilung der Ausgaben pro Standarddrink nach Getränketyp -> sieht okay aus, wenn auch insgesamt sehr niedrige Ausgaben
-ggplot(evs_long_tmp, aes(x = getraenketyp, y = ausgaben_pro_stdd)) +
+spendingsstdd_dist_bybevtype <- ggplot(evs_long_tmp, aes(x = getraenketyp, y = ausgaben_pro_stdd)) +
   geom_violin() +
   geom_boxplot(width = 0.2, outlier.shape = NA) +
   geom_jitter(width = 0.45, size = 0.2, alpha=0.2) +
@@ -298,6 +308,7 @@ ggplot(evs_long_tmp, aes(x = getraenketyp, y = ausgaben_pro_stdd)) +
        y = "Ausgaben pro Standarddrink (€)", x = "Getränketyp") +
   theme_minimal() +
   scale_y_continuous(limits = c(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95)), breaks = seq(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95), 0.1))
+ggsave(file.path(output_path, "spendingsstdd_dist_bybevtype.png"), spendingsstdd_dist_bybevtype, width = 6, height = 6, units = "in")
 
 # ==================================================================================================================================================================
 # 4) Berechnungen: Ausgaben pro Standarddrink gruppenspezifisch aggregiert
@@ -387,15 +398,15 @@ evs_bis64_strata_trinkgruppe_long <- evs_bis64_strata_trinkgruppe %>%
   mutate(einkommensgruppe = factor(einkommensgruppe, labels = c("niedriges Einkommen", "mittleres Einkommen", "hohes Einkommen")))
 
 ggplot(evs_bis64_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd_w, fill = trinkgruppe)) +
-  stat_halfeye(
-    # adjust bandwidth
-    adjust = 0.4,
+#  stat_halfeye(
+#    # adjust bandwidth
+#    adjust = 0.4,
     # move to the right
-    justification = -0.1,
+#    justification = -0.1,
     # remove the slub interval
-    .width = 0,
-    point_colour = NA
-  ) +
+#    .width = 0,
+#    point_colour = NA
+#  ) +
   stat_dots(
     # ploting on left side
     side = "right",
@@ -412,12 +423,12 @@ ggplot(evs_bis64_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd
     outlier.color = NA,
     alpha = 0.5
   ) +
-  facet_grid(beverage_type ~ einkommensgruppe, scales = "free_y") +
-  labs(title = "Verteilung der Ausgaben pro Standarddrink nach Getränketyp, Einkommen und Trinkgruppe",
+#  facet_grid(beverage_type ~ einkommensgruppe, scales = "free_y") +
+  labs(title = "Verteilung der Ausgaben pro Standarddrink nach Trinkgruppe",
        subtitle = "(Standarddrink = 0,33l Bier; 0,04l Spirituosen; 0,125l Wein)",
        y = "Ausgaben pro Standarddrink (€)", x = "Trinkgruppe") +
-  theme_minimal() +
-  scale_y_continuous(limits = c(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE)), breaks = seq(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE), 0.1))
+  theme_minimal()
+#  scale_y_continuous(limits = c(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE)), breaks = seq(0, quantile(evs_bis64_strata_trinkgruppe_long$Wert_pro_stdd_w, 0.95, na.rm = TRUE), 0.1))
 
 
 
