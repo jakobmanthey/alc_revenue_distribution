@@ -3,8 +3,9 @@ title: "Berechnung der durchschnittlichen Ausgaben pro Alkohol-Standarddrink"
 subtitle: "nach Getränketyp, Einkommen, Alter, Geschlecht und Trinkgruppe mittels EVS und ESA"
 author: "Anna"
 date: "2024-04-03"
-output: html_document
-
+output: 
+  html_document:
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
@@ -51,7 +52,7 @@ esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Soziodemographische 
 # Datengrundlage
 ## 1. EVS (Einkommens- und Verbrauchsstichprobe) 2018
 
-In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren habe ich bislang nicht berücksichtigt.
+In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren habe ich bislang nicht berücksichtigt. Essentiell ist, dass es hier nur um AlkoholKÄUFE geht, nicht um den tatsächlichen Konsum.
 
 
 ```{r, echo = FALSE}
@@ -369,16 +370,6 @@ evs_adults <- evs_adults %>%
   ))
 ```
 
-### Fallzahlen
-
-
-
-```{r fallzahlen}
-nrow(evs_long)
-nrow(evs_adults)
-```
-n = 82.808 Personen in EVS, n = 18048 Personen in EVS ab 18 Jahren
-
 ## Trinkgruppen
 
 Für die Einteilung der Trinkgruppen auf Personenebene nutze ich die Verteilung der Trinkgruppen (Risikoarm, Riskant, Hoch) aus ESA. Diese variieren je nach Geschlecht, Alter und Einkommen. Pro Gruppe wird die Gesamtmenge an Standarddrinks berechnet, die an der Perzentilgrenze für die jeweilige Trinkgruppe liegt. Anschließend wird die Gesamtmenge an Standarddrinks pro Person mit den entsprechenden Grenzwerten verglichen und die Person in eine Trinkgruppe eingeteilt.
@@ -395,11 +386,14 @@ evs_adults$gesamtmenge_stdd_w = with(evs_adults, bier_menge_stdd_w + wein_menge_
 
 ```{r stddtotal2}  
 summary(evs_adults$gesamtmenge_stdd_w)
-sum(evs_adults$gesamtmenge_stdd_w == 0) # n=4443 Personen bzw.
-sum(evs_adults$gesamtmenge_stdd_w == 0)/nrow(evs_adults) # 25% aller Personen kaufen kein Alkohol
+sum(evs_adults$gesamtmenge_stdd_w == 0) # n = 4443 Personen bzw.
+length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0])) # n = 2850 haushalte
+
+length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0]))/length(unique(evs_adults$ID)) # 27,5% aller Haushalte kaufen kein Alkohol
+
 ```
 
-Etwa 25% der Personen kaufen keinen Alkohol. Diese werden für die Einteilung in Trinkgruppen und weiteren Analysen ausgeschlossen.
+Etwa 27,5% der Haushalte kaufen keinen Alkohol. Diese (bzw. die entsprechenden Personen) werden für die Einteilung in Trinkgruppen und weiteren Analysen ausgeschlossen.
 
 ```{r show stddtotal, echo=FALSE}
 #plot histogram of gesamtmenge_stdd_w by sex, age, income
@@ -550,3 +544,13 @@ aggregated_spendings_long <- aggregated_spendings %>%
 kable(aggregated_spendings_long, "html") %>%
   kable_styling()
 ```
+
+### Fallzahlen
+
+```{r fallzahlen}
+nrow(evs) #n haushalte total
+length(unique(evs_strata_trinkgruppe$ID)) # n haushalte mit alkoholkäufen
+nrow(evs_strata_trinkgruppe) #n personen mit alkoholkäufen
+nrow(evs_strata_trinkgruppe)/length(unique(evs_strata_trinkgruppe$ID)) #durchschnittliche anzahl an personen pro haushalt
+```
+Es liegen Daten von n = 10.351 Haushalten in der EVS vor, von denen n = 7.501 Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von n = 13.605 Personen über 18 Jahren vor. Dementsprechend gibt es pro Haushalt durchschnittlich 1,8 Personen über 18 Jahren.
