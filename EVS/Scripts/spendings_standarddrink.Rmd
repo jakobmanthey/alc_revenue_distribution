@@ -52,7 +52,7 @@ esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Soziodemographische 
 # Datengrundlage
 ## 1. EVS (Einkommens- und Verbrauchsstichprobe) 2018
 
-In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren habe ich bislang nicht berücksichtigt. Essentiell ist, dass es hier nur um AlkoholKÄUFE geht, nicht um den tatsächlichen Konsum.
+In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren habe ich bislang nicht berücksichtigt. Essenziell ist, dass es nur um AlkoholKÄUFE geht, nicht um den tatsächlichen Konsum.
 
 
 ```{r, echo = FALSE}
@@ -184,6 +184,7 @@ evs[evs$N_Haushaltsmitglieder == 2, c("N_Haushaltsmitglieder", "gewichtungsfakto
 2. Haushaltsnettoeinkommen in Monatseinkommen umrechnen (Original auf Quartalsbasis)
 ``` {r income2}
 evs$haushaltsnettoeinkommen_month <- evs$haushaltsnettoeinkommen_quartal/3
+summary(evs$haushaltsnettoeinkommen_month) #median 3496.7
 ```
 3. Monatliches Haushaltsnettoeinkommen durch Gewichtungsfaktor teilen
 ```{r income3}
@@ -192,10 +193,9 @@ summary(evs$netequincome)
 ```
 Laut Statistischem Bundesamt liegt das Median Äquivalenzeinkommen bei 22713 Euro / 12 = 1892 Euro pro Monat.
 Hier deutlich höher -> evtl. weil Hochrechnungsfaktoren von mir nicht berücksichtigt wurden?
-```{r check income, echo=FALSE}
-summary(evs$haushaltsnettoeinkommen_month) #median 3496.7
-```
+
 4. **Terzile** (äquivalent zu ESA um drei Einkommensgruppen zu bilden)
+
 Terzile entsprechen nicht den ESA Grenzen! (ESA: niedrig: <= 1375€ (2018) bzw. <= 1583€ (2021), mittel: <= 2250€ bzw. <= 2500€, hoch: > 2250€ bzw. > 2586€)
 ```{r income4}
 # Einkommensgruppe: 1 <= Wert 1. Terzil, 2 <= 2. Terzil, 3 <= 3. Terzil des Nettoäquivaleinkommens
@@ -208,7 +208,7 @@ print(terzile_einkommen_grenzen)
 ```
 ## 2. ESA (Basis um Trinkgruppen zu bilden)
 
-```{r esa, echo=FALSE}
+```{r esa}
 
 ## 2) DATA PREPARATION
 # -----------------------------------------------------------------------------------------------------------------------
@@ -257,17 +257,15 @@ if (exportdata == TRUE) {
   ggsave(file.path(output_path, "perc_trgr_sexageincome.png"), perc_trgr_sexageincome, width = 10, height = 6, units = "in")
   ggsave(file.path(output_path, "perc_highrisk_sexage.png"), perc_highrisk_sexage, width = 6, height = 6, units = "in")
 }
-```  
 
-```{r show esa, echo=FALSE}  
 print(head(esa_perctrinkgruppen[,1:6]))
 perc_trgr_sexageincome 
-``` 
+```  
 
 # Ausgaben pro Standarddrink auf Haushaltsebene berechnen (gewichtet nach Anzahl der erwachsenen Haushaltsmitglieder)
 
 Zunächst fasse ich jeweils Ausgaben und Mengen der einzelnen Getränketypen zu Bier, Wein und Spirituosen zusammen.
-```{r summarizebevtype}  
+```{r summarizebevtype, class.source = "fold-show" }  
 evs$Bier_Wert <- evs$bier_untergärig_wert + evs$bier_anderes_wert + evs$bier_misch_wert + evs$bier_ohneBez_wert
 evs$Bier_Menge <- evs$bier_untergärig_menge + evs$bier_anderes_menge + evs$bier_misch_menge + evs$bier_ohneBez_menge
 evs$Wein_Wert <- evs$wein_rot_wert + evs$wein_weiss_wert + evs$wein_rose_wert + evs$wein_schaum_wert + evs$wein_apfel_wert + evs$wein_frucht_wert + evs$wein_wermut_wert + evs$wein_sherry_wert + evs$wein_portwein_wert + evs$wein_anderes_wert + evs$wein_ohneBez_wert
@@ -283,7 +281,7 @@ Dann gewichte ich Ausgaben und Menge nach Anzahl der erwachsenen Haushaltsmitgli
 1. Alle Haushaltsmitglieder unter 18 tragen nicht zu Alkoholkäufen bei.
 2. Ausgaben und Menge für Alkohol werden gleichmäßig auf die erwachsenen Haushaltsmitglieder aufgeteilt (unabhängig von Alter, Geschlecht und individuellem Einkommen).
 
-```{r avgspendings weighting}
+```{r avgspendings weighting, class.source = "fold-show"}
 ## gekaufte Mengen und Ausgaben (Wert) nach Anzahl der Haushaltsmitglieder gewichten
 zu_gewichtende_spalten <- c("Bier_Wert", "Wein_Wert", "Sprit_Wert", "Bier_Menge", "Wein_Menge", "Sprit_Menge")
 # Teilt ausgewählte Spalten durch Anzahl der erwachsenen Haushaltsmitglieder und speichert Ergebnisse in neuen Spalten (w=weighted)
@@ -291,7 +289,7 @@ evs <- evs %>%
   mutate(across(all_of(zu_gewichtende_spalten), list(~ . / N_Haushaltsmitglieder_adult), .names = "{.col}_w"))
 ```
 Umrechnen der Menge in Standarddrinks (0,33l Bier, 0,125l Wein, 0,04l Spirituosen) 
-```{r stdd}
+```{r stdd, class.source = "fold-show"}
 ## gekaufte Mengen (in l) in Standarddrinks (stdd=standarddrinks) umrechnen (0,33l Bier, 0,125l Wein, 0,04l Spirituosen), um Getränketypen bzgl. Alkoholgehalt vergleichbar zu machen
 evs$bier_menge_stdd_w = evs$Bier_Menge_w / 0.33
 evs$wein_menge_stdd_w = evs$Wein_Menge_w / 0.125
@@ -306,7 +304,7 @@ evs$Wein_Wert_pro_stdd_w <- with(evs, ifelse(wein_menge_stdd_w != 0, Wein_Wert_w
 evs$Sprit_Wert_pro_stdd_w <- with(evs, ifelse(sprit_menge_stdd_w != 0, Sprit_Wert_w / sprit_menge_stdd_w, 0))
 ```
 
-```{r show spending, echo=FALSE}
+```{r show spending}
 # data to long format für plotting
 evs_long_tmp <- evs %>%
   pivot_longer(cols=c("Bier_Wert_pro_stdd_w", "Wein_Wert_pro_stdd_w", "Sprit_Wert_pro_stdd_w"), names_to = "getraenketyp", values_to = "ausgaben_pro_stdd") %>%
@@ -395,7 +393,7 @@ length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0]))/length(unique(
 
 Etwa 27,5% der Haushalte kaufen keinen Alkohol. Diese (bzw. die entsprechenden Personen) werden für die Einteilung in Trinkgruppen und weiteren Analysen ausgeschlossen.
 
-```{r show stddtotal, echo=FALSE}
+```{r show stddtotal}
 #plot histogram of gesamtmenge_stdd_w by sex, age, income
 ggplot(filter(evs_adults, gesamtmenge_stdd_w > 0), aes(x = gesamtmenge_stdd_w, fill = as.factor(sex))) +
   geom_histogram(bins = 60, position = "identity", alpha = 0.5) +
@@ -547,10 +545,10 @@ kable(aggregated_spendings_long, "html") %>%
 
 ### Fallzahlen
 
-```{r fallzahlen}
+```{r fallzahlen, class.source = 'fold-show'}
 nrow(evs) #n haushalte total
 length(unique(evs_strata_trinkgruppe$ID)) # n haushalte mit alkoholkäufen
 nrow(evs_strata_trinkgruppe) #n personen mit alkoholkäufen
 nrow(evs_strata_trinkgruppe)/length(unique(evs_strata_trinkgruppe$ID)) #durchschnittliche anzahl an personen pro haushalt
 ```
-Es liegen Daten von n = 10.351 Haushalten in der EVS vor, von denen n = 7.501 Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von n = 13.605 Personen über 18 Jahren vor. Dementsprechend gibt es pro Haushalt durchschnittlich 1,8 Personen über 18 Jahren.
+Es liegen Daten von **n = 10.351** Haushalten in der EVS vor, von denen **n = 7.501** Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von **n = 13.605** Personen über 18 Jahren vor. Dementsprechend gibt es **pro Haushalt durchschnittlich 1,8 Personen** über 18 Jahren.
