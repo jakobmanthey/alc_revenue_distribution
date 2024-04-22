@@ -144,6 +144,91 @@ print(head(evs))
 print(nrow(evs))
 ```
 
+**Plausibilitätscheck**: Um die Daten kennenzulernen, schauen wir uns zunächst an, wie hoch die Ausgaben für die jeweiligen Getränketypen sind (in handelsüblichen Größen).
+
+```{r plausicheck}
+# data to long format with one column for beverage type
+getraenketypen <- c('bier','wein', 'sprit')
+
+# data to lomg format
+temp_df <- pivot_longer(evs, 
+                             cols = matches(paste0(getraenketypen, "_.*")), 
+                             names_to = c("Getraenketyp", ".value"),
+                             names_pattern = "(.*)_(.*)")
+
+temp_df$avgpriceperlit <- temp_df$wert/temp_df$menge
+
+#convert avg price to standard units one can find in stores (bier = 0,33l, wein = 0,75l, sprit = 0,7l)
+temp_df$avgpriceperstd <- ifelse(grepl("bier", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.33,
+                                     ifelse(grepl("wein", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.75,
+                                            ifelse(grepl("sprit", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.7,
+                                            0)))
+
+#plot
+spending_beer <- ggplot(subset(temp_df, grepl("bier", Getraenketyp)), aes(x = Getraenketyp, y = avgpriceperstd)) +
+  geom_violin() +
+  geom_boxplot(width = 0.2, outlier.shape = NA) +
+  geom_jitter(width = 0.45, size = 0.2, alpha=0.1) +
+  labs(title = "Ausgaben pro 0,33l Bier",
+       y = "Ausgaben pro 0,33l (€)",
+       x = "Getränketyp") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, 2.5)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+spending_wine <- ggplot(subset(temp_df, grepl("^wein", Getraenketyp)), aes(x = Getraenketyp, y = avgpriceperstd)) +
+  geom_boxplot(width = 0.2, outlier.shape = NA) +
+  geom_jitter(width = 0.45, size = 0.2, alpha=0.1) +
+  labs(title = "Ausgaben Preis pro 0,75l Wein",
+       y = "Ausgaben pro 0,75l (€)",
+       x = "Getränketyp") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, 10)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+spending_sprit <- ggplot(subset(temp_df, grepl("sprit", Getraenketyp)), aes(x = Getraenketyp, y = avgpriceperstd)) +
+  geom_violin() +
+  geom_boxplot(width = 0.2, outlier.shape = NA) +
+  geom_jitter(width = 0.45, size = 0.2, alpha=0.1) +
+  labs(title = "Ausgaben pro 0,7l Spirituosen",
+       y = "Ausgaben pro 0,7l (€)",
+       x = "Getränketyp") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, 20)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+ggsave(file.path(output_path, "spending_beer.png"), spending_beer, width = 6, height = 6, units = "in", bg = "white")
+ggsave(file.path(output_path, "spending_wine.png"), spending_wine, width = 6, height = 6, units = "in", bg = "white")
+ggsave(file.path(output_path, "spending_sprit.png"), spending_sprit, width = 6, height = 6, units = "in", bg = "white")
+
+spending_beer
+spending_wine
+spending_sprit
+```
+
+Die Verteilungen sind alle rechtsschief, dh es gibt viele Haushalte, die wenig für Alkohol ausgeben und wenige, die viel ausgeben. Die Median Ausgaben pro Einheit sind erstaunlich niedrig, scheinen aber plausibel.
+
+Konkret betragen die durchschnittlichen und Median - Ausgaben in den EVS-Daten:
+
+```{r avgprice}
+
+priceperunit <- temp_df %>%
+  group_by(Getraenketyp) %>%
+  summarise(avg_price_per_unit_mean = mean(avgpriceperstd, na.rm = T),
+            avg_pice_per_unit_median = median(avgpriceperstd, na.rm = T)) %>%
+  mutate(unit = ifelse(grepl("bier", Getraenketyp), "0,33l",
+                   ifelse(grepl("^wein", Getraenketyp), "0,75l",
+                      ifelse(grepl("sprit", Getraenketyp), "0,7l", "0"))))
+
+kable(priceperunit)
+```
+
+
+``` {r test}
+avg_beer_price_smallbottle <- mean(evs$bier_untergärig_wert[evs$bier_untergärig_menge %% 0.33 == 0] / evs$bier_untergärig_menge[evs$bier_untergärig_menge %% 0.33 == 0], na.rm = T)*0.33
+print(avg_beer_price_smallbottle)
+```
 ### 1.1. Nettoäquivalenzeinkommen berechnen und Einkommensgruppen bilden
 
 1. Bedarfgewichtungsfaktor pro Haushalt berechnen nach neuer OECD-Skala:
@@ -552,3 +637,9 @@ nrow(evs_strata_trinkgruppe) #n personen mit alkoholkäufen
 nrow(evs_strata_trinkgruppe)/length(unique(evs_strata_trinkgruppe$ID)) #durchschnittliche anzahl an personen pro haushalt
 ```
 Es liegen Daten von **n = 10.351** Haushalten in der EVS vor, von denen **n = 7.501** Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von **n = 13.605** Personen über 18 Jahren vor. Dementsprechend gibt es **pro Haushalt durchschnittlich 1,8 Personen** über 18 Jahren.
+
+# To-Do
+
+- Standard Drinks präzisieren
+- Mischgetränke inkludieren
+- Konfidenzintervalle basierend auf n Haushalte statt n Personen
