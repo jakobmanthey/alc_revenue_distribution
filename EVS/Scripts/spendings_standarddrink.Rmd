@@ -134,11 +134,17 @@ evs <- evs_raw %>%
          wein_sherry_menge, wein_portwein_wert, wein_portwein_menge, wein_anderes_wert, wein_anderes_menge, wein_ohneBez_wert, wein_ohneBez_menge,
          sprit_likör_wert, sprit_likör_menge, sprit_whisky_wert, sprit_whisky_menge, sprit_branntwein_wert, sprit_branntwein_menge, sprit_anderes_wert,
          sprit_anderes_menge)
- 
+```
+
+```{r drinks to numeric} 
 # Konvertiere alle Bier-, Wein- und Spirituosenmengen und -ausgaben in numerische Werte
-evs[, grep("wein|bier|sprit", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
+evs[, grep("wein|bier|sprit|misch", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
+```
+
+```{r n adults} 
 evs$N_Haushaltsmitglieder_adult <- evs$N_Haushaltsmitglieder - evs$n_kinder_u1 - evs$n_kinder_1_3 - evs$n_kinder_3_6 - evs$n_kinder_6_12 - evs$n_kinder_12_18
-```  
+``` 
+
 ```{r show data}  
 print(head(evs))
 print(nrow(evs))
