@@ -1,0 +1,174 @@
+---
+title: "Berechnung des durchschnittlichen Monatseinkommens"
+subtitle: " pro Einkommensgruppe und Gewichtungsfaktor der EVS"
+author: "Anna"
+date: "2024-05-14"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn = -1)
+# ==================================================================================================================================================================
+# 0) ESSENTIALS
+# ______________________________________________________________________________________________________________________
+# clean workspace
+rm(list=ls())
+
+packages <- c("tidyverse", "readxl", "ggdist", "knitr", "kableExtra") 
+
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+# Load packages
+invisible(lapply(packages, library, character.only = TRUE))
+
+# Export des Outputs
+print(getwd())
+exportdata <- TRUE # TRUE -> resultierende Datafiles werden exportiert
+output_path <- "../Output/" # Pfad für Export der Ergebnisse
+if (!dir.exists(output_path)) {
+  dir.create(output_path)
+}
+```
+
+```{r load data, include=FALSE}
+## 1) LOAD EVS DATA
+#EVS
+evs_path <- file.path("../Data", "evs_ngt2018_slr.csv")
+print(evs_path)
+evs_raw <- read.csv(evs_path, header = TRUE, sep = ";", dec = ",", stringsAsFactors = FALSE)
+```  
+
+
+# Datengrundlage
+## 1. EVS (Einkommens- und Verbrauchsstichprobe) 2018
+
+In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und Hochrechnungsfaktoren. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat.
+
+
+```{r prepare data, echo = FALSE}
+# -----------------------------------------------------------------------------------------------------------------------
+# 2.2) EVS
+
+# Filtern und Umbenennen der relevanten Variablen
+evs <- evs_raw %>%
+  rename(ID = "EF3", #HaushaltsID
+         N_Haushaltsmitglieder = "EF7", #Anzahl Personen im Haushalt
+         sex_pers1 = "EF8u2", #Geschlecht Person 1 (Pers 1 ist immer Haupteinkommensbezieher)
+         yob_pers1 = "EF8u3", #Alter Person 1
+         sex_pers2 = "EF9u2", #Geschlecht Person 2
+         yob_pers2 = "EF9u3", #Alter Person 2
+         sex_pers3 = "EF10u2", #Geschlecht Person 3
+         yob_pers3 = "EF10u3", #Alter Person 3
+         sex_pers4 = "EF11u2",
+         yob_pers4 = "EF11u3",
+         sex_pers5 = "EF12u2",
+         yob_pers5 = "EF12u3",
+         sex_pers6 = "EF13u2",
+         yob_pers6 = "EF13u3",
+         sex_pers7 = "EF14u2",
+         yob_pers7 = "EF14u3",
+         sex_pers8 = "EF15u2",
+         yob_pers8 = "EF15u3",
+         n_kinder_u1 = "EF22", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt unter 1 Jahr
+         n_kinder_1_3 = "EF23", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 1 bis unter 3
+         n_kinder_3_6 = "EF24", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 3 bis unter 6
+         n_kinder_6_12 = "EF25", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 6 bis unter 12
+         n_kinder_12_18 = "EF26", #Anzahl der ledigen Kinder des Haupteinkommensbeziehers / Partners im Haushalt zwischen 12 bis unter 18
+         haushaltsnettoeinkommen_quartal = "EF30",
+         weight_bund = "EF31") %>%
+  select(ID, N_Haushaltsmitglieder, sex_pers1, yob_pers1, yob_pers2, sex_pers2, yob_pers3, sex_pers3,
+         yob_pers4, sex_pers4, yob_pers5, sex_pers5, yob_pers6, sex_pers6, yob_pers7, sex_pers7, yob_pers8, sex_pers8, n_kinder_u1, n_kinder_1_3,
+         n_kinder_3_6, n_kinder_6_12, n_kinder_12_18, haushaltsnettoeinkommen_quartal, weight_bund)
+ 
+# Berechnung der Anzahl der Haushaltsmitglieder ab 18 Jahren
+evs$N_Haushaltsmitglieder_adult <- evs$N_Haushaltsmitglieder - evs$n_kinder_u1 - evs$n_kinder_1_3 - evs$n_kinder_3_6 - evs$n_kinder_6_12 - evs$n_kinder_12_18
+```  
+### 1.1. Nettoäquivalenzeinkommen berechnen und Einkommensgruppen bilden
+
+1. Bedarfgewichtungsfaktor pro Haushalt berechnen nach neuer OECD-Skala:
+   - Bedarfsgewicht 1 für erste erwachsene Person im Haushalt
+   - 0,5 für weitere Personen im Alter von 14 und mehr Jahren
+   - 0,3 für jedes Kind im Alter von unter 14 Jahren
+```{r income}  
+berechne_gewichtungsfaktor <- function(row) {
+  gewichtung <- 1 # Faktor für Hauptverdiener (pers1)
+  
+  # iterate over other household members (pers2-pers8)
+  for (i in 2:8) {
+    pers <- paste0('yob_pers', i)
+#    print(pers)
+    yob <- row[[pers]]
+#    print(yob)
+    if (is.na(yob)) {
+      gewichtung <- gewichtung + 0 # Wenn Geburtsjahr NA (=Person existiert nicht), addiere 0 zur Gewichtung
+    } else {
+      if (yob <= 2004) {
+        gewichtung <- gewichtung + 0.5 # Für Personen <= 2004
+      } else {
+        gewichtung <- gewichtung + 0.3 # Für Personen > 2004
+      }
+    }
+  }
+  
+  return(gewichtung)
+}
+
+evs$gewichtungsfaktor <- apply(evs, 1, berechne_gewichtungsfaktor)
+```
+``` {r filtering}
+#include only households with minimum 1 person younger than 65
+# filter dataset for any of yob_pers[i] > 1953
+evs_below65 <- evs %>%
+  filter(yob_pers1 > 1953 | yob_pers2 > 1953 | yob_pers3 > 1953 | yob_pers4 > 1953 | yob_pers5 > 1953 | yob_pers6 > 1953 | yob_pers7 > 1953 | yob_pers8 > 1953)
+
+```
+
+```{r income2}  
+summary(evs_below65$gewichtungsfaktor)
+summary(evs_below65$N_Haushaltsmitglieder_adult)
+summary(evs_below65$N_Haushaltsmitglieder)
+table(evs_below65$gewichtungsfaktor)
+hist(evs_below65$gewichtungsfaktor)
+```
+Hochrechnungsfaktoren:
+Wieso so hoch? Wie genau zu interpretieren? 
+Vorerst ignorieren
+```{r weights bund}
+str(evs_below65$weight_bund)
+#weight_bund is a character, convert to numeric
+evs_below65$weight_bund <- as.numeric(evs_below65$weight_bund)
+summary(evs_below65$weight_bund)
+```
+2. Haushaltsnettoeinkommen in Monatseinkommen umrechnen (Original auf Quartalsbasis)
+``` {r income2}
+evs_below65$haushaltsnettoeinkommen_month <- evs_below65$haushaltsnettoeinkommen_quartal/3
+summary(evs_below65$haushaltsnettoeinkommen_month) #median 3801.7
+```
+``` {r income groups}
+evs_below65 <- evs_below65 %>%
+  mutate(einkommensgruppe = cut(haushaltsnettoeinkommen_month,
+                                breaks = c(-Inf, 500, 750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 3000, 4000, 5000, Inf),
+                                labels = c("bis unter 500 Euro", "500 bis unter 750 Euro", "750 bis unter 1.000 Euro",
+                                           "1.000 bis unter 1.250 Euro", "1.250 bis unter 1.500 Euro", "1.500 bis unter 1.750 Euro",
+                                           "1.750 bis unter 2.000 Euro", "2.000 bis unter 2.250 Euro", "2.250 bis unter 2.500 Euro",
+                                           "2.500 bis unter 3.000 Euro", "3.000 bis unter 4.000 Euro", "4.000 bis unter 5.000 Euro",
+                                           "5.000 Euro und mehr")))
+table(evs_below65$einkommensgruppe)
+ggplot(evs_below65, aes(x = einkommensgruppe)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+``` {r income3}
+income_perincomegroupweight <- evs_below65 %>%
+  group_by(einkommensgruppe, gewichtungsfaktor) %>%
+  summarise(mean_haushaltsnettoeinkommen_month = mean(haushaltsnettoeinkommen_month, na.rm = TRUE),
+            median_haushaltsnettoeinkommen_month = median(haushaltsnettoeinkommen_month, na.rm = TRUE),
+            sd_haushaltsnettoeinkommen_month = sd(haushaltsnettoeinkommen_month, na.rm = TRUE),
+            n = n())
+```
