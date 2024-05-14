@@ -136,7 +136,7 @@ evs <- evs_raw %>%
          sprit_anderes_menge)
  
 # Konvertiere alle Bier-, Wein- und Spirituosenmengen und -ausgaben in numerische Werte
-evs[, grep("wein|bier|sprit", names(evs))] <- sapply(evs[, grep("wein|bier|sprit", names(evs))], as.numeric)
+evs[, grep("wein|bier|sprit", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
 evs$N_Haushaltsmitglieder_adult <- evs$N_Haushaltsmitglieder - evs$n_kinder_u1 - evs$n_kinder_1_3 - evs$n_kinder_3_6 - evs$n_kinder_6_12 - evs$n_kinder_12_18
 ```  
 ```{r show data}  
@@ -148,7 +148,7 @@ print(nrow(evs))
 
 ```{r plausicheck}
 # data to long format with one column for beverage type
-getraenketypen <- c('bier','wein', 'sprit')
+getraenketypen <- c('bier','wein', 'sprit', 'misch')
 
 # data to lomg format
 temp_df <- pivot_longer(evs, 
