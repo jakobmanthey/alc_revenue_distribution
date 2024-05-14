@@ -129,13 +129,6 @@ evs_below65 <- evs %>%
 
 ```
 
-```{r income2}  
-summary(evs_below65$gewichtungsfaktor)
-summary(evs_below65$N_Haushaltsmitglieder_adult)
-summary(evs_below65$N_Haushaltsmitglieder)
-table(evs_below65$gewichtungsfaktor)
-hist(evs_below65$gewichtungsfaktor)
-```
 Hochrechnungsfaktoren:
 Wieso so hoch? Wie genau zu interpretieren? 
 Vorerst ignorieren
@@ -149,6 +142,13 @@ summary(evs_below65$weight_bund)
 ``` {r income2}
 evs_below65$haushaltsnettoeinkommen_month <- evs_below65$haushaltsnettoeinkommen_quartal/3
 summary(evs_below65$haushaltsnettoeinkommen_month) #median 3801.7
+
+#show relationship between income and weight
+ggplot(evs_below65, aes(x = gewichtungsfaktor, y = haushaltsnettoeinkommen_month)) +
+  geom_point(alpha = 0.1) +
+# add boxplot for each weight group
+  geom_boxplot(aes(group = gewichtungsfaktor), alpha = 0.5) +
+  theme_minimal()
 ```
 ``` {r income groups}
 evs_below65 <- evs_below65 %>%
@@ -164,11 +164,57 @@ ggplot(evs_below65, aes(x = einkommensgruppe)) +
   geom_bar() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
+```{r income2}  
+summary(evs_below65$gewichtungsfaktor)
+summary(evs_below65$N_Haushaltsmitglieder_adult)
+summary(evs_below65$N_Haushaltsmitglieder)
+table(evs_below65$gewichtungsfaktor)
+
+dist_bedarfsgewichte <- ggplot(evs_below65, aes(x = gewichtungsfaktor)) +
+  geom_bar() +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(1, 4, 0.3))
+
+#export dist_bedarfsgewichte
+if (exportdata) {
+  ggsave(paste0(output_path, "dist_bedarfsgewichte.png"), plot = dist_bedarfsgewichte, width = 10, height = 6)
+}
+```
+
+```{r group gewichtungsfaktor}
+#gewichtungsfaktor_grenzen <- quantile(evs_below65$gewichtungsfaktor, c(0, 0.25, 0.5, 0.75, 1)) -> fkt nicht, weil nicht eindeutig
+#print(gewichtungsfaktor_grenzen)
+
+
+gewichtungsfaktor_grenzen <- c(min(evs_below65$gewichtungsfaktor), 1.3, 1.6, 2.1, max(evs_below65$gewichtungsfaktor)) 
+
+
+evs_below65$gewichtungsfaktor_grouped <- cut(evs_below65$gewichtungsfaktor, #neue Spalte mit Einkommensgruppen bilden
+                            breaks = gewichtungsfaktor_grenzen,
+                            labels = c("1", "1.3-1.5", "1.6-2", "2.1-4.1"), include.lowest = TRUE, right = FALSE)
+```
+```{r plot income groups}
+table(evs_below65$gewichtungsfaktor_grouped, evs_below65$gewichtungsfaktor)
+
+dist_groupedbedarfsgewichte <- ggplot(evs_below65, aes(x = gewichtungsfaktor_grouped)) +
+  geom_bar()
+
+#export dist_groupedbedarfsgewichte
+if (exportdata) {
+  ggsave(paste0(output_path, "dist_groupedbedarfsgewichte.png"), plot = dist_groupedbedarfsgewichte, width = 10, height = 6)
+}
+```
+
 ``` {r income3}
 income_perincomegroupweight <- evs_below65 %>%
-  group_by(einkommensgruppe, gewichtungsfaktor) %>%
+  group_by(einkommensgruppe, gewichtungsfaktor_grouped) %>%
   summarise(mean_haushaltsnettoeinkommen_month = mean(haushaltsnettoeinkommen_month, na.rm = TRUE),
             median_haushaltsnettoeinkommen_month = median(haushaltsnettoeinkommen_month, na.rm = TRUE),
             sd_haushaltsnettoeinkommen_month = sd(haushaltsnettoeinkommen_month, na.rm = TRUE),
             n = n())
+#export data as csv
+if (exportdata) {
+  write.csv(income_perincomegroupweight, file = paste0(output_path, "income_perincomegroupweight.csv"), row.names = FALSE)
+}
 ```
