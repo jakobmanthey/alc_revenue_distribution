@@ -158,8 +158,16 @@ evs_below65 <- evs_below65 %>%
                                            "1.000 bis unter 1.250 Euro", "1.250 bis unter 1.500 Euro", "1.500 bis unter 1.750 Euro",
                                            "1.750 bis unter 2.000 Euro", "2.000 bis unter 2.250 Euro", "2.250 bis unter 2.500 Euro",
                                            "2.500 bis unter 3.000 Euro", "3.000 bis unter 4.000 Euro", "4.000 bis unter 5.000 Euro",
-                                           "5.000 Euro und mehr")))
+                                           "5.000 Euro und mehr"),include.lowest = TRUE, right = FALSE))
+```
+```{r check income groups}
 table(evs_below65$einkommensgruppe)
+
+ggplot(evs_below65, aes(x = haushaltsnettoeinkommen_month, y = einkommensgruppe)) +
+  geom_point() +
+  scale_x_continuous(limits = c(1, 4000)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 ggplot(evs_below65, aes(x = einkommensgruppe)) +
   geom_bar() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -215,6 +223,6 @@ income_perincomegroupweight <- evs_below65 %>%
             n = n())
 #export data as csv
 if (exportdata) {
-  write.csv(income_perincomegroupweight, file = paste0(output_path, "income_perincomegroupweight.csv"), row.names = FALSE)
+  write.csv(income_perincomegroupweight, file = paste0(output_path, "income_perincomegroupweight_v1.csv"), row.names = FALSE)
 }
 ```
