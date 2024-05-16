@@ -457,7 +457,7 @@ spendingsstdd_dist_bybevtype <- ggplot(evs_long_tmp, aes(x = getraenketyp, y = a
        y = "Ausgaben pro Standarddrink (€)", x = "Getränketyp") +
   theme_minimal() +
   scale_y_continuous(limits = c(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95)), breaks = seq(0, quantile(evs_long_tmp$ausgaben_pro_stdd, 0.95), 0.1))
-ggsave(file.path(output_path, "spendingsstdd_dist_bybevtype.png"), spendingsstdd_dist_bybevtype, width = 6, height = 6, units = "in")
+ggsave(file.path(output_path, "spendingsstdd_dist_bybevtype.png"), spendingsstdd_dist_bybevtype, width = 6, height = 6, units = "in", bg = "white")
 
 spendingsstdd_dist_bybevtype
 ```
@@ -597,6 +597,7 @@ evs_strata_trinkgruppe_long <- evs_strata_trinkgruppe %>%
   pivot_wider(names_from = stat_type, values_from = value) %>%
   mutate(einkommensgruppe = factor(einkommensgruppe, labels = c("niedriges Einkommen", "mittleres Einkommen", "hohes Einkommen")))
 
+#nach Trinkgruppe
 ggplot(evs_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd_w, fill = trinkgruppe)) +
   stat_dots(
     # ploting on left side
@@ -619,7 +620,10 @@ ggplot(evs_strata_trinkgruppe_long, aes(x = trinkgruppe, y = Wert_pro_stdd_w, fi
        subtitle = "(Standarddrink = 12g Alkohol)",
        y = "Ausgaben pro Standarddrink (€)", x = "Trinkgruppe", fill = "Trinkgruppe") +
   theme_minimal()
+
+
 ```
+
 
 ### 3. Aggregieren: Ausgaben pro Standarddrink mit Konfidenzintervallen (pro Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe - Stratum) 
 
