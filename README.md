@@ -23,8 +23,6 @@ Episodisches Rauschtrinken wurde mit einem offenen Antwortformat über die Anzah
 
 Das kategorial erhobene Haushalts-Einkommen im ESA wurde mithile der gewichteten Mittelwerte der metrischen Angaben aus dem EVS 2018, differenziert nach Haushaltsgröße, metrisch umcodiert. Um zu kleinen Fallzahlen nicht zu viel Bedeutung beizumessen, wurden nur Angaben von mind. 5 Personen pro Zelle benutzt. Ansonsten wurden die Mittelwerte zu einer Haushaltsgröße zusammengefügt. Wenn beispielsweise nur 5 Angaben im EVS zum Einkommen in Haushalten mit mehr als einer Person gab, dann wurde der Mittelwert nicht nach Haushhaltsgröße differnziert. Wenn es >10 Angaben für Ein-Personenhaushalte, >5 für 1,5 Personenhaushalte, aber nur 4 für >1,5 Personenhaushalte gab, dann wurde der Mittelwert für >1,5 Haushalte verwendet. Im Anschluss wurde das so ermittelte Einkommen mit der Haushaltsgröße zu einem Haushalts-Netto-Äquivalenzeinkommen umcodiert. Diese wurde anhand der Einkommensdezile aus der EU-SILC differnziert für die Jahre 2018 und 2021 in niedrig (1.-3. Dezil), mittel (4-6. Dezil) und hoch (7.-10. Dezil) eingeteilt.
 
-Um diese und weitere Berechnungen nachvollziehen zu können, sind die Stata Codes zusammen mit einer Liste der Variablennamen hochgeladen worden. Die Liste der Variablennamen wurde hochgeladen, da sich die Benennung im Stata Code und in der Excel Liste der Ergebnisse unterscheidet.
-
 
 
 ## EVS -\> to be added by Anna
