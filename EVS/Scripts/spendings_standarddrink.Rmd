@@ -43,7 +43,7 @@ evs_path <- file.path("../Data", "evs_ngt2018_slr.csv")
 print(evs_path)
 evs_raw <- read.csv(evs_path, header = TRUE, sep = ";", dec = ",", stringsAsFactors = FALSE)
 #ESA
-esa_path <- file.path("../../ESA", "ESA_Alc_Share_240624.xlsx")
+esa_path <- file.path("../../ESA", "ESA_Alc_Share_240626.xlsx")
 esa_trinkgruppen_raw <- readxl::read_excel(esa_path, sheet = "Trinkgruppen")
 esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Soziodemographische Gruppen")
 ```  
@@ -52,7 +52,7 @@ esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Soziodemographische 
 # Datengrundlage
 ## 1. EVS (Einkommens- und Verbrauchsstichprobe) 2018
 
-In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren habe ich bislang nicht berücksichtigt. Essenziell ist, dass es nur um AlkoholKÄUFE geht, nicht um den tatsächlichen Konsum.
+In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren sind vorhanden, werden aber zur Berechnen der durchschnittlichen Ausgaben pro Drink nicht berücksichtigt. Essenziell ist, dass es nur um AlkoholKÄUFE im Einzelhandel geht, nicht um den tatsächlichen Konsum. Ausgenommen sind ebenso Käufe in der Gastronomie.
 
 
 ```{r, echo = FALSE}
@@ -141,6 +141,21 @@ evs <- evs_raw %>%
 evs[, grep("wein|bier|sprit|misch", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
 ```
 
+```{r factorise sex}
+# all columns beginning with sex to factor
+levels_sex <- c(1, 2)  # Die ursprünglichen Werte
+labels_sex <- c("Male", "Female")  # Die Labels, die verwendet werden sollen
+
+# Alle Spalten, die "sex_pers" im Namen haben, identifizieren
+sex_columns <- grep("sex_pers", names(evs), value = TRUE)
+
+# Umwandlung der identifizierten Spalten in Faktoren
+evs[, sex_columns] <- lapply(evs[, sex_columns], function(x) {
+  factor(x, levels = levels_sex, labels = labels_sex)
+})
+
+```
+
 ```{r n adults} 
 evs$N_Haushaltsmitglieder_adult <- evs$N_Haushaltsmitglieder - evs$n_kinder_u1 - evs$n_kinder_1_3 - evs$n_kinder_3_6 - evs$n_kinder_6_12 - evs$n_kinder_12_18
 ``` 
@@ -154,7 +169,7 @@ print(nrow(evs))
 
 ```{r plausicheck}
 # data to long format with one column for beverage type
-getraenketypen <- c('bier','wein', 'sprit', 'misch')
+getraenketypen <- c('bier','wein', 'sprit', 'mischgetraenke')
 
 # data to lomg format
 temp_df <- pivot_longer(evs, 
@@ -168,7 +183,8 @@ temp_df$avgpriceperlit <- temp_df$wert/temp_df$menge
 temp_df$avgpriceperstd <- ifelse(grepl("bier", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.33,
                                      ifelse(grepl("wein", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.75,
                                             ifelse(grepl("sprit", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.7,
-                                            0)))
+                                                   ifelse(grepl("mischgetraenke", temp_df$Getraenketyp), temp_df$avgpriceperlit*0.33, 
+                                                          0))))
 
 #plot
 spending_beer <- ggplot(subset(temp_df, grepl("bier", Getraenketyp)), aes(x = Getraenketyp, y = avgpriceperstd)) +
@@ -203,14 +219,26 @@ spending_sprit <- ggplot(subset(temp_df, grepl("sprit", Getraenketyp)), aes(x = 
   scale_y_continuous(limits = c(0, 20)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+spending_misch <- ggplot(subset(temp_df, grepl("mischgetraenke", Getraenketyp)), aes(x = Getraenketyp, y = avgpriceperstd)) +
+  geom_violin() +
+  geom_boxplot(width = 0.1, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 0.6, alpha=0.1) +
+  labs(title = "Ausgaben pro 0,33l Mischgetränk",
+       y = "Ausgaben pro 0,33l (€)",
+       x = "Getränketyp") +
+  theme_minimal() +
+  scale_y_continuous(limits = c(0, 4))
+
 
 ggsave(file.path(output_path, "spending_beer.png"), spending_beer, width = 6, height = 6, units = "in", bg = "white")
 ggsave(file.path(output_path, "spending_wine.png"), spending_wine, width = 6, height = 6, units = "in", bg = "white")
 ggsave(file.path(output_path, "spending_sprit.png"), spending_sprit, width = 6, height = 6, units = "in", bg = "white")
+ggsave(file.path(output_path, "spending_misch.png"), spending_misch, width = 6, height = 6, units = "in", bg = "white")
 
 spending_beer
 spending_wine
 spending_sprit
+spending_misch
 ```
 
 Die Verteilungen sind alle rechtsschief, dh es gibt viele Haushalte, die wenig für Alkohol ausgeben und wenige, die viel ausgeben. Die Median Ausgaben pro Einheit sind erstaunlich niedrig, scheinen aber plausibel.
@@ -225,7 +253,8 @@ priceperunit <- temp_df %>%
             avg_pice_per_unit_median = median(avgpriceperstd, na.rm = T)) %>%
   mutate(unit = ifelse(grepl("bier", Getraenketyp), "0,33l",
                    ifelse(grepl("^wein", Getraenketyp), "0,75l",
-                      ifelse(grepl("sprit", Getraenketyp), "0,7l", "0"))))
+                      ifelse(grepl("sprit", Getraenketyp), "0,7l", 
+                             ifelse(grepl("misch", Getraenketyp), "0,33l", "0")))))
 
 kable(priceperunit)
 ```
@@ -278,33 +307,29 @@ evs$netequincome <- evs$haushaltsnettoeinkommen_month / evs$gewichtungsfaktor
 summary(evs$netequincome)
 ```
 Laut Statistischem Bundesamt liegt das Median Äquivalenzeinkommen bei 22713 Euro / 12 = 1892 Euro pro Monat.
-Hier deutlich höher -> evtl. weil Hochrechnungsfaktoren von mir nicht berücksichtigt wurden?
+Hier deutlich höher -> evtl. weil Hochrechnungsfaktoren nicht berücksichtigt wurden?
 
 4. **Terzile** (äquivalent zu ESA um drei Einkommensgruppen zu bilden)
 
-Terzile entsprechen nicht den ESA Grenzen! (ESA: niedrig: <= 1375€ (2018) bzw. <= 1583€ (2021), mittel: <= 2250€ bzw. <= 2500€, hoch: > 2250€ bzw. > 2586€)
+Terzile entsprechen den EU SILC Dezilen (niedrig: 1.-3. Dezil; mittel: 4-7. Dezil; hoch: 8.-10. Dezil)
+
+(ESA: niedrig: <= 1375€ (2018) bzw. <= 1583€ (2021), mittel: <= 2250€ bzw. <= 2500€, hoch: > 2250€ bzw. > 2586€)
 ```{r income4}
 # Einkommensgruppe: 1 <= Wert 1. Terzil, 2 <= 2. Terzil, 3 <= 3. Terzil des Nettoäquivaleinkommens
-terzile_einkommen_grenzen <- quantile(evs$netequincome, c(0, 1/3, 2/3, 1)) #Terzile finden
-terzile_einkommen_grenzen_EUSILC <- c(-Inf, 1355, 2572, Inf)
 terzile_einkommen_grenzen_EUSILC_terz <- c(-Inf, 1462, 2406, Inf)
 
 evs$einkommensgruppe <- cut(evs$netequincome, 
                             breaks = terzile_einkommen_grenzen_EUSILC_terz,
-                            labels = c(1, 2, 3),
+                            labels = c("niedrig", "mittel", "hoch"),
                             right = TRUE)
-print(terzile_einkommen_grenzen)
 
+#check
+table(evs$einkommensgruppe)
 
 ```
 ## 2. ESA (Basis um Trinkgruppen zu bilden)
 
 ```{r esa}
-
-## 2) DATA PREPARATION
-# -----------------------------------------------------------------------------------------------------------------------
-
-# 2.1) ESA
 
 # Auswahl der relevanten Spalten (Geschlecht, Alter, Einkommen, Risikoarm(%), Riskant(%), Hoch(%)) für die Einteilung der Trinkgruppen
 
@@ -313,8 +338,7 @@ esa_perctrinkgruppen <- esa_socgruppen_raw %>%
 
 # Anpassen an EVS
 esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
-  mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen"), labels = c(1, 2, 3)),
-         Sex_new = factor(Geschlecht, levels = c("Male", "Female"), labels = c(1, 2)),
+  mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen"), labels = c("niedrig", "mittel", "hoch")),
          Alter_new = factor(sub(" Jahre", "", Alter), labels = c("18-34", "35-59", "60+")))
 
 # Prozente zu Dezimalzahlen umwandeln
@@ -350,12 +374,15 @@ if (exportdata == TRUE) {
 }
 
 print(head(esa_perctrinkgruppen[,1:6]))
-perc_trgr_sexageincome 
+perc_trgr_sexageincome
+perc_highrisk_sexage
 ```  
 
 # Ausgaben pro Standarddrink auf Haushaltsebene berechnen (gewichtet nach Anzahl der erwachsenen Haushaltsmitglieder)
 
-Zunächst rechne ich die gekauften Mengen in Standarddrinks um, um die Getränketypen vergleichbar zu machen.
+## Umrechnung in Standarddrinks
+
+Zunächst werden die gekauften Mengen in Standarddrinks umgerechnet, um die Getränketypen vergleichbar zu machen.
 ```{r stdd, class.source = "fold-show"}
 ## gekaufte Mengen (in l) in Standarddrinks (stdd=standarddrinks) umrechnen
 
@@ -365,7 +392,7 @@ abv <- c(bier_untergärig = 0.05, bier_anderes = 0.05, bier_misch = 0.025, bier_
          sprit_likör = 0.4, sprit_whisky = 0.4, sprit_branntwein = 0.4, sprit_anderes = 0.41, mischgetraenke = 0.04)
 
 #note: "wein_schaum" hat hier weniger Alkoholgehalt als Wein, da jeweils der zweite Peak aus Table 1, Kuitunen-Paul et al. 2017 verwendet wurde (11 für Schaumwein, 13 für Wein)
-#note: "Sprit Anderes" examples are Korn, Rum, Wodka, -> used the catergory "Schnapps" from Table 1, Kuitunen-Paul et al. 2017
+#note: "Sprit Anderes" examples are Korn, Rum, Wodka in the questionnaire -> used the catergory "Schnapps" from Table 1, Kuitunen-Paul et al. 2017
 #note: Alkoholgehalt von Mischgetränken in ESA: "1 Mischgetränk enthält im ESA 0.04L Spirituose mit 33% Vol Alc (die restlichen 0.26/0.36L sind dann nicht-alkoholisch)", daher wird hier Alkoholgehalt von 4% angenommen (Durschnitt von 0.3 und 0.4l Größe)
 
 
@@ -385,9 +412,7 @@ for (col in names(evs)) {
 evs %>% select(bier_misch_menge, bier_misch_menge_stdd) #check stdd conversion -> okay
 ```
 
-```{r n mixdrink}
-sum(evs$mischgetraenke_menge > 0) # nur 62 Haushalte haben Mischgetränke gekauft
-```
+## Zusammenfassung zu Bier, Wein und Spirituosen
 
 Dann fasse ich jeweils Ausgaben, Mengen in l und Mengen in Standarddrinks der einzelnen Getränketypen zu Bier, Wein und Spirituosen zusammen.
 Mischgetränke brauchen nicht zusammengefasst werden, da es nur eine Kategorie gibt.
@@ -415,6 +440,8 @@ evs$Sprit_Menge <- evs$sprit_likör_menge + evs$sprit_whisky_menge + evs$sprit_b
 evs$Sprit_Menge_stdd <- evs$sprit_likör_menge_stdd + evs$sprit_whisky_menge_stdd + evs$sprit_branntwein_menge_stdd + evs$sprit_anderes_menge_stdd
 ```  
 
+## Gewichtung der Ausgaben und Menge nach Anzahl der erwachsenen Haushaltsmitglieder
+
 Dann gewichte ich Ausgaben, Menge in l und Menge in stdd nach Anzahl der erwachsenen Haushaltsmitglieder.
 
 **Annahmen:**
@@ -429,7 +456,9 @@ zu_gewichtende_spalten <- c("Bier_Wert", "Wein_Wert", "Sprit_Wert", "mischgetrae
 evs <- evs %>%
   mutate(across(all_of(zu_gewichtende_spalten), list(~ . / N_Haushaltsmitglieder_adult), .names = "{.col}_w"))
 ```
- 
+
+## Ausgaben pro Standarddrink
+
 Dann teile ich die Ausgaben durch die Menge in Standarddrinks, um die Ausgaben pro Standarddrink zu berechnen.
 
 ```{r spendingperstdd}
@@ -506,6 +535,11 @@ evs_adults <- evs_adults %>%
   ))
 ```
 
+```{r n mixdrink}
+sum(evs_adults$mischgetraenke_menge > 0) # 110 Personen haben Mischgetränke gekauft
+n_distinct(evs_adults$ID[evs_adults$mischgetraenke_menge > 0]) #aus 62 Haushalten
+```
+
 ## Trinkgruppen
 
 Für die Einteilung der Trinkgruppen auf Personenebene nutze ich die Verteilung der Trinkgruppen (Risikoarm, Riskant, Hoch) aus ESA. Diese variieren je nach Geschlecht, Alter und Einkommen. Pro Gruppe wird die Gesamtmenge an Standarddrinks berechnet, die an der Perzentilgrenze für die jeweilige Trinkgruppe liegt. Anschließend wird die Gesamtmenge an Standarddrinks pro Person mit den entsprechenden Grenzwerten verglichen und die Person in eine Trinkgruppe eingeteilt.
@@ -514,16 +548,16 @@ Für die Einteilung der Trinkgruppen auf Personenebene nutze ich die Verteilung 
 
 ```{r stddtotal}
 
-## Gesamtmenge an Standarddrinks pro Haushalt (dient als proxy für die Trinkgruppen)
-evs_adults$gesamtmenge_stdd_w = with(evs_adults, Bier_Menge_stdd_w + Wein_Menge_stdd_w + Sprit_Menge_stdd_w, mischgetraenke_menge_stdd_w)
+## Gesamtmenge an Standarddrinks pro Person (dient als proxy für die Trinkgruppen)
+evs_adults$gesamtmenge_stdd_w = with(evs_adults, Bier_Menge_stdd_w + Wein_Menge_stdd_w + Sprit_Menge_stdd_w + mischgetraenke_menge_stdd_w)
 #plausi check: plot histogram der gesamtmenge_stdd_w
 #hist_gesamtmenge_stdd_w <- hist(evs_adults$gesamtmenge_stdd_w, breaks = 200, xlim = c(0, 400), main = "(Gekaufte) Menge an #Standarddrinks, pro Monat)", xlab = "Menge an Standarddrinks pro Person", ylab = "Häufigkeit")
 ```
 
 ```{r stddtotal2}  
 summary(evs_adults$gesamtmenge_stdd_w) 
-sum(evs_adults$gesamtmenge_stdd_w == 0) # n = 4443 Personen bzw.
-length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0])) # n = 2850 haushalte
+sum(evs_adults$gesamtmenge_stdd_w == 0) # n = 4437 Personen bzw.
+length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0])) # n = 2845 haushalte
 
 length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0]))/length(unique(evs_adults$ID)) # 27,5% aller Haushalte kaufen kein Alkohol
 
@@ -538,7 +572,6 @@ ggplot(filter(evs_adults, gesamtmenge_stdd_w > 0), aes(x = gesamtmenge_stdd_w, f
   facet_grid(altersgruppe ~ einkommensgruppe, labeller = labeller(einkommensgruppe = c("1" = "niedriges Einkommen", "2" = "mittleres Einkommen", "3" = "hohes Einkommen"))) +
   scale_y_continuous(limits = c(0, 70)) +
   scale_x_continuous(limits = c(0, quantile(evs_adults$gesamtmenge_stdd_w, 0.95))) +
-  scale_fill_discrete(labels = c("männlich", "weiblich")) +
   labs(title = "(Gekaufte) Menge an Standarddrinks nach Geschlecht, Alter und Einkommen",
        subtitle = "pro Monat, ausgeschlossen Fälle mit 0 gekauften Getränken",
        x = "Menge an Standarddrinks pro Person",
@@ -556,7 +589,7 @@ ggplot(filter(evs_adults, gesamtmenge_stdd_w > 0), aes(x = gesamtmenge_stdd_w, f
 
 # Identifier für alle Kombinationen von Einkommen, Alter und Geschlecht bilden
 evs_adults$identifier <- paste(evs_adults$einkommensgruppe, evs_adults$altersgruppe, evs_adults$sex, sep = "_")
-esa_perctrinkgruppen$identifier <- paste(esa_perctrinkgruppen$Einkommen_new, esa_perctrinkgruppen$Alter_new, esa_perctrinkgruppen$Sex_new, sep = "_")
+esa_perctrinkgruppen$identifier <- paste(esa_perctrinkgruppen$Einkommen_new, esa_perctrinkgruppen$Alter_new, esa_perctrinkgruppen$Geschlecht, sep = "_")
 
 selected_esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   select(identifier, Risikoarm, Riskant, Hoch)
@@ -565,13 +598,13 @@ selected_esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
 evs_strata <- merge(selected_esa_perctrinkgruppen, evs_adults, by = c("identifier"), all.x = TRUE)
 
 # Zunächst wird nach identifier gruppiert um so nach strata die Werte der entspechenden 
-# Perzentile zu errechnen. Für jeden Haushalt wird dann die Gesamtmenge mit den 
+# Perzentile zu errechnen. Für jede Person wird dann die Gesamtmenge mit den 
 # jeweiligen Grenzwerten verglichen und eine Gruppeneinteilung (Trinkgruppen) vorgenommen
 
 evs_strata_trinkgruppe <- evs_strata %>%
   filter(gesamtmenge_stdd_w > 0) %>% #nur Haushalte mit gekauften Getränken (nur "Konsumierende")
   group_by(identifier) %>%
-  mutate(Risikoarm_p = quantile(gesamtmenge_stdd_w, Risikoarm), #berechnet Gesamtmenge an standarddrinks an stellle perzentilgrenze (ESA) für jede Gruppe
+  mutate(Risikoarm_p = quantile(gesamtmenge_stdd_w, Risikoarm), #berechnet Gesamtmenge an standarddrinks an Stellle perzentilgrenze (ESA) für jede Gruppe
          Riskant_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant)),
          Gefährlich_p = quantile(gesamtmenge_stdd_w, (Risikoarm+Riskant+Hoch))) %>% 
   ungroup() %>%
@@ -660,34 +693,59 @@ mean_ci_high <- function(values, ids, conf = 0.95, na.rm = FALSE) {
   mean(values, na.rm = TRUE) + se * qnorm(1 - alpha / 2)
 } 
 
-# Erstellt neuen Dataframe mit aggregierten Ausgaben pro Standarddrink pro Stratum (Getränketyp x Einkommensgruppe x Altersgruppe x Geschlecht x Trinkgruppe)
+# Erstellt Aggregation für Mischgetränke ohne Gruppierung (Fallzahl ist zu klein, um Gruppen zu bilden)
+aggregated_mischgetraenke <- evs_strata_trinkgruppe %>%
+  summarize(
+    misch_avg_wert_pro_stdd_w = mean(Mischgetraenke_Wert_pro_stdd_w, na.rm = TRUE),
+    misch_ci_low_wert_pro_stdd_w = mean_ci_low(Mischgetraenke_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    misch_ci_high_wert_pro_stdd_w = mean_ci_high(Mischgetraenke_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    misch_n = n_distinct(ID[!is.na(Mischgetraenke_Wert_pro_stdd_w)])
+  )
 
-aggregated_spendings <- evs_strata_trinkgruppe %>%
+# Erstellt Aggregation für andere Getränke mit Gruppierung
+aggregated_other_drinks <- evs_strata_trinkgruppe %>%
   group_by(trinkgruppe, einkommensgruppe, altersgruppe, sex) %>%
   summarize(
     bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
     bier_ci_low_wert_pro_stdd_w = mean_ci_low(Bier_Wert_pro_stdd_w, ID, na.rm = TRUE),
     bier_ci_high_wert_pro_stdd_w = mean_ci_high(Bier_Wert_pro_stdd_w, ID, na.rm = TRUE),
-    bier_n = sum(!is.na(Bier_Wert_pro_stdd_w)),
+    bier_n = n_distinct(ID[!is.na(Bier_Wert_pro_stdd_w)]),
     wein_avg_wert_pro_stdd_w = mean(Wein_Wert_pro_stdd_w, na.rm = TRUE),
     wein_ci_low_wert_pro_stdd_w = mean_ci_low(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
     wein_ci_high_wert_pro_stdd_w = mean_ci_high(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
-    wein_n = sum(!is.na(Wein_Wert_pro_stdd_w)),
+    wein_n = n_distinct(ID[!is.na(Wein_Wert_pro_stdd_w)]),
     sprit_avg_wert_pro_stdd_w = mean(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
     sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
     sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
-    sprit_n = sum(!is.na(Sprit_Wert_pro_stdd_w)),
-    misch_avg_wert_pro_stdd_w = mean(Mischgetraenke_Wert_pro_stdd_w, na.rm = TRUE),
-    misch_ci_low_wert_pro_stdd_w = mean_ci_low(Mischgetraenke_Wert_pro_stdd_w, ID, na.rm = TRUE),
-    misch_ci_high_wert_pro_stdd_w = mean_ci_high(Mischgetraenke_Wert_pro_stdd_w, ID, na.rm = TRUE),
-    misch_n = sum(!is.na(Mischgetraenke_Wert_pro_stdd_w)))
+    sprit_n = n_distinct(ID[!is.na(Sprit_Wert_pro_stdd_w)])
+  )
 
-# Optional je nach Verwendungszweck: Erstellt neue Spalte "beverage_type" und wandelt ursprüngliche Spalten entsprechend in long-format um
-aggregated_spendings_long <- aggregated_spendings %>%
+# Füge die aggregierten Mischgetränke-Listen mit den anderen Getränken zusammen
+# Da aggregierte Mischgetränke keine Gruppen haben, müssen wir temporär einige Spalten zur Kombination hinzufügen
+aggregated_spendings_complete <- aggregated_other_drinks %>%
+  bind_cols(aggregated_mischgetraenke %>%
+              slice(rep(1:n(), each = nrow(aggregated_other_drinks))))
+
+# Optional je nach Verwendungszweck: Wandelt originale Spalten entsprechend in Long-Format und dann in Wide-Format um
+aggregated_spendings_long <- aggregated_spendings_complete %>%
   pivot_longer(cols = starts_with(c("bier", "wein", "sprit", "misch")),
                names_to = "original_column") %>% 
   separate(original_column, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
   pivot_wider(names_from = stat_type, values_from = value)
+
+#for all columns with beverage type == misch, set sex, einkommensgruppe, altersgruppe und trinkgruppe to "all"
+aggregated_spendings_long <- aggregated_spendings_long %>%
+  mutate(
+    trinkgruppe = if_else(beverage_type == "misch", "all", trinkgruppe),
+    einkommensgruppe = if_else(beverage_type == "misch", "all", einkommensgruppe),
+    altersgruppe = if_else(beverage_type == "misch", "all", altersgruppe),
+    sex = if_else(beverage_type == "misch", "all", sex)
+  )
+
+#remove duplicates as mischgetränke are not grouped
+aggregated_spendings_long <- aggregated_spendings_long %>%
+  distinct()
+
 ```
 
 ### Ergebnisfile
