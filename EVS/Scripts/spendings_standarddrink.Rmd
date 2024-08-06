@@ -744,7 +744,8 @@ aggregated_spendings_long <- aggregated_spendings_long %>%
 
 #remove duplicates as mischgetränke are not grouped
 aggregated_spendings_long <- aggregated_spendings_long %>%
-  distinct()
+  distinct() %>%
+  rename(n_haushalte = n)
 
 ```
 
@@ -753,6 +754,30 @@ aggregated_spendings_long <- aggregated_spendings_long %>%
 ```{r show aggspendings, echo = FALSE}
 kable(aggregated_spendings_long, "html") %>%
   kable_styling()
+```
+# Export
+
+```{r export, echo=FALSE}
+# Exportiere Ergebnisse als csv und RDS
+
+current_date <- Sys.Date()
+
+# Exportiere Ergebnisse als csv und RDS
+if (exportdata == TRUE) {
+  # Ergebnisse als csv 
+  write.csv(
+    aggregated_spendings_long, 
+    file.path(output_path, paste0("spendingsperdrink_", current_date, ".csv"))
+  )
+  
+  # und als RDS ausgeben lassen
+  saveRDS(
+    aggregated_spendings_long, 
+    file.path(output_path, paste0("spendingsperdrink_", current_date, ".rds"))
+  )
+} else {
+  print("no data exported")
+}
 ```
 
 ### Fallzahlen
@@ -767,4 +792,4 @@ table(evs_strata_trinkgruppe$einkommensgruppe) #n personen pro einkommensgruppe
 
 evs %>% filter(mischgetraenke_menge > 0 & !any(grepl("bier|wein|sprit", names(evs)))) # es gibt keine Haushalte, die nur Mischgetränke kaufen 
 ```
-Es liegen Daten von **n = 10.351** Haushalten in der EVS vor, von denen **n = 7.501** Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von **n = 13.605** Personen über 18 Jahren vor. Dementsprechend gibt es **pro Haushalt durchschnittlich 1,8 Personen** über 18 Jahren.
+Es liegen Daten von **n = 10.351** Haushalten in der EVS vor, von denen **n = 7.506** Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von **n = 13.611** Personen über 18 Jahren vor. Dementsprechend gibt es **pro Haushalt durchschnittlich 1,8 Personen** über 18 Jahren.
