@@ -438,7 +438,38 @@ evs$Sprit_Wert <- evs$sprit_likör_wert + evs$sprit_whisky_wert + evs$sprit_bran
 evs$Sprit_Menge <- evs$sprit_likör_menge + evs$sprit_whisky_menge + evs$sprit_branntwein_menge + evs$sprit_anderes_menge
 
 evs$Sprit_Menge_stdd <- evs$sprit_likör_menge_stdd + evs$sprit_whisky_menge_stdd + evs$sprit_branntwein_menge_stdd + evs$sprit_anderes_menge_stdd
-```  
+``` 
+
+# Einschub: Wie groß ist der Anteil der Haushalte mit ü65-jährigen am Gesamtkonsum? 
+
+```{r share over 64}
+evs <- evs %>% mutate(allabove65 = ifelse(yob_pers1 > 1953 | yob_pers2 > 1953 | yob_pers3 > 1953 | yob_pers4 > 1953 | yob_pers5 > 1953 | yob_pers6 > 1953 | yob_pers7 > 1953 | yob_pers8 > 1953, 
+                                          FALSE, 
+                                          TRUE))
+
+evs <- evs %>% 
+  rowwise() %>% 
+  mutate(allabove65 = !any(c_across(c(yob_pers1, yob_pers2, yob_pers3, yob_pers4, 
+                                      yob_pers5, yob_pers6, yob_pers7, yob_pers8)) > 1953, na.rm = TRUE)) %>%
+  ungroup()
+
+table(evs$allabove65)
+
+#check -> okay
+evs %>% select(yob_pers1, yob_pers2, yob_pers3, yob_pers4, yob_pers5, yob_pers6, yob_pers7, yob_pers8, allabove65)
+
+#summary of total bought drinks
+shareoverunder65 <- evs %>% group_by(allabove65) %>%
+  summarise(total_wine = sum(Wein_Menge_stdd),
+            total_beer = sum(Bier_Menge_stdd),
+            total_sprit = sum(Sprit_Menge_stdd), 
+            total_mix = sum(mischgetraenke_menge_stdd))
+
+total_wine <- sum(shareoverunder65$total_wine,na.rm=TRUE)
+total_beer <- sum(shareoverunder65$total_beer,na.rm=TRUE)
+total_sprit <- sum(shareoverunder65$total_sprit,na.rm=TRUE)
+total_misch <- sum(shareoverunder65$total_misch,na.rm=TRUE)
+```
 
 ## Gewichtung der Ausgaben und Menge nach Anzahl der erwachsenen Haushaltsmitglieder
 
@@ -564,6 +595,7 @@ length(unique(evs_adults$ID[evs_adults$gesamtmenge_stdd_w == 0]))/length(unique(
 ```
 
 Etwa 27,5% der Haushalte kaufen keinen Alkohol. Diese (bzw. die entsprechenden Personen) werden für die Einteilung in Trinkgruppen und weiteren Analysen ausgeschlossen.
+
 
 ```{r show stddtotal}
 #plot histogram of gesamtmenge_stdd_w by sex, age, income
@@ -695,15 +727,85 @@ mean_ci_high <- function(values, ids, conf = 0.95, na.rm = FALSE) {
 
 # Erstellt Aggregation für Mischgetränke ohne Gruppierung (Fallzahl ist zu klein, um Gruppen zu bilden)
 aggregated_mischgetraenke <- evs_strata_trinkgruppe %>%
+  group_by(einkommensgruppe) %>%
   summarize(
     misch_avg_wert_pro_stdd_w = mean(Mischgetraenke_Wert_pro_stdd_w, na.rm = TRUE),
     misch_ci_low_wert_pro_stdd_w = mean_ci_low(Mischgetraenke_Wert_pro_stdd_w, ID, na.rm = TRUE),
     misch_ci_high_wert_pro_stdd_w = mean_ci_high(Mischgetraenke_Wert_pro_stdd_w, ID, na.rm = TRUE),
     misch_n = n_distinct(ID[!is.na(Mischgetraenke_Wert_pro_stdd_w)])
-  )
+  ) %>%
+  ungroup() %>%
+  mutate(
+    trinkgruppe = "all",
+    altersgruppe = "all",
+    sex = "all")
 
-# Erstellt Aggregation für andere Getränke mit Gruppierung
-aggregated_other_drinks <- evs_strata_trinkgruppe %>%
+#Extra: Zusammenlegung sehr kleiner Gruppen
+
+highrisk_low_18_mw <- evs_strata_trinkgruppe %>%
+  filter(trinkgruppe == "hochriskant" & einkommensgruppe == "niedrig" & altersgruppe == "18-34") %>%
+    group_by(trinkgruppe, einkommensgruppe, altersgruppe) %>%
+  summarize(
+    bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
+    bier_ci_low_wert_pro_stdd_w = mean_ci_low(Bier_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    bier_ci_high_wert_pro_stdd_w = mean_ci_high(Bier_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    bier_n = n_distinct(ID[!is.na(Bier_Wert_pro_stdd_w)]),
+    wein_avg_wert_pro_stdd_w = mean(Wein_Wert_pro_stdd_w, na.rm = TRUE),
+    wein_ci_low_wert_pro_stdd_w = mean_ci_low(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    wein_ci_high_wert_pro_stdd_w = mean_ci_high(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    wein_n = n_distinct(ID[!is.na(Wein_Wert_pro_stdd_w)]),
+    sprit_avg_wert_pro_stdd_w = mean(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
+    sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_n = n_distinct(ID[!is.na(Sprit_Wert_pro_stdd_w)])) %>%
+  mutate(sex = "all")
+
+highrisk_low_35_mw <- evs_strata_trinkgruppe %>%
+  filter(trinkgruppe == "hochriskant" & einkommensgruppe == "niedrig" & altersgruppe %in% c("35-59", "60+")) %>%
+    group_by(trinkgruppe, einkommensgruppe) %>%
+  summarize(
+    bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
+    bier_ci_low_wert_pro_stdd_w = mean_ci_low(Bier_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    bier_ci_high_wert_pro_stdd_w = mean_ci_high(Bier_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    bier_n = n_distinct(ID[!is.na(Bier_Wert_pro_stdd_w)]),
+    wein_avg_wert_pro_stdd_w = mean(Wein_Wert_pro_stdd_w, na.rm = TRUE),
+    wein_ci_low_wert_pro_stdd_w = mean_ci_low(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    wein_ci_high_wert_pro_stdd_w = mean_ci_high(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    wein_n = n_distinct(ID[!is.na(Wein_Wert_pro_stdd_w)]),
+    sprit_avg_wert_pro_stdd_w = mean(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
+    sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_n = n_distinct(ID[!is.na(Sprit_Wert_pro_stdd_w)])) %>%
+  mutate(sex = "all",
+         altersgruppe = "35+")
+
+
+highrisk_med_18_mw_beersprit <- evs_strata_trinkgruppe %>%
+  filter(trinkgruppe == "hochriskant" & einkommensgruppe == "mittel" & altersgruppe == "18-34") %>%
+  group_by(trinkgruppe, einkommensgruppe, altersgruppe) %>%
+  summarize(
+    wein_avg_wert_pro_stdd_w = mean(Wein_Wert_pro_stdd_w, na.rm = TRUE),
+    wein_ci_low_wert_pro_stdd_w = mean_ci_low(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    wein_ci_high_wert_pro_stdd_w = mean_ci_high(Wein_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    wein_n = n_distinct(ID[!is.na(Wein_Wert_pro_stdd_w)]),
+    sprit_avg_wert_pro_stdd_w = mean(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
+    sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_n = n_distinct(ID[!is.na(Sprit_Wert_pro_stdd_w)])) %>%
+  mutate(sex = "all")
+
+highrisk_med_35_mw_sprit <- evs_strata_trinkgruppe %>%
+  filter(trinkgruppe == "hochriskant" & einkommensgruppe == "mittel" & altersgruppe == "35-59") %>%
+  group_by(trinkgruppe, einkommensgruppe, altersgruppe) %>%
+  summarize(
+    sprit_avg_wert_pro_stdd_w = mean(Sprit_Wert_pro_stdd_w, na.rm = TRUE),
+    sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
+    sprit_n = n_distinct(ID[!is.na(Sprit_Wert_pro_stdd_w)])) %>%
+  mutate(sex = "all")
+
+
+aggregated_other_drinks_large_n <- evs_strata_trinkgruppe %>%
   group_by(trinkgruppe, einkommensgruppe, altersgruppe, sex) %>%
   summarize(
     bier_avg_wert_pro_stdd_w = mean(Bier_Wert_pro_stdd_w, na.rm = TRUE),
@@ -718,36 +820,51 @@ aggregated_other_drinks <- evs_strata_trinkgruppe %>%
     sprit_ci_low_wert_pro_stdd_w = mean_ci_low(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
     sprit_ci_high_wert_pro_stdd_w = mean_ci_high(Sprit_Wert_pro_stdd_w, ID, na.rm = TRUE),
     sprit_n = n_distinct(ID[!is.na(Sprit_Wert_pro_stdd_w)])
-  )
+  ) 
+
+aggregated_other_drinks_smalln <- bind_rows(highrisk_low_18_mw, highrisk_low_35_mw, highrisk_med_18_mw_beersprit, highrisk_med_35_mw_sprit)
 
 # Füge die aggregierten Mischgetränke-Listen mit den anderen Getränken zusammen
 # Da aggregierte Mischgetränke keine Gruppen haben, müssen wir temporär einige Spalten zur Kombination hinzufügen
-aggregated_spendings_complete <- aggregated_other_drinks %>%
-  bind_cols(aggregated_mischgetraenke %>%
-              slice(rep(1:n(), each = nrow(aggregated_other_drinks))))
+aggregated_spendings_complete_large_n <- bind_rows(aggregated_other_drinks_large_n, aggregated_mischgetraenke)
 
 # Optional je nach Verwendungszweck: Wandelt originale Spalten entsprechend in Long-Format und dann in Wide-Format um
-aggregated_spendings_long <- aggregated_spendings_complete %>%
+aggregated_spendings_long_largen <- aggregated_spendings_complete_large_n %>%
   pivot_longer(cols = starts_with(c("bier", "wein", "sprit", "misch")),
                names_to = "original_column") %>% 
   separate(original_column, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
   pivot_wider(names_from = stat_type, values_from = value)
 
-#for all columns with beverage type == misch, set sex, einkommensgruppe, altersgruppe und trinkgruppe to "all"
-aggregated_spendings_long <- aggregated_spendings_long %>%
-  mutate(
-    trinkgruppe = if_else(beverage_type == "misch", "all", trinkgruppe),
-    einkommensgruppe = if_else(beverage_type == "misch", "all", einkommensgruppe),
-    altersgruppe = if_else(beverage_type == "misch", "all", altersgruppe),
-    sex = if_else(beverage_type == "misch", "all", sex)
-  )
 
-#remove duplicates as mischgetränke are not grouped
-aggregated_spendings_long <- aggregated_spendings_long %>%
-  distinct() %>%
+#for all columns with beverage type == misch, set sex, einkommensgruppe, altersgruppe und trinkgruppe to "all"
+aggregated_spendings_long_largen <- aggregated_spendings_long_largen %>%
+  filter(!is.na(n)) %>%
+  rename(n_haushalte = n) %>%
+  filter(!(trinkgruppe == "hochriskant" & einkommensgruppe == "niedrig" & altersgruppe == "18-34")) %>%
+  filter(!(trinkgruppe == "hochriskant" & einkommensgruppe == "niedrig" & altersgruppe %in% c("35-59", "60+"))) %>%
+  filter(!(trinkgruppe == "hochriskant" & einkommensgruppe == "mittel" & altersgruppe == "18-34" & beverage_type %in% c("sprit", "wein"))) %>%
+  filter(!(trinkgruppe == "hochriskant" & einkommensgruppe == "mittel" & altersgruppe == "35-59" & beverage_type == "sprit"))
+
+aggregated_spendings_long_smalln <- aggregated_other_drinks_smalln %>%
+  pivot_longer(cols = starts_with(c("bier", "wein", "sprit")),
+               names_to = "original_column") %>% 
+  separate(original_column, into = c("beverage_type", "stat_type"), sep = "_", extra = "merge") %>%
+  pivot_wider(names_from = stat_type, values_from = value) %>%
+  filter(!is.na(n)) %>%
   rename(n_haushalte = n)
 
+aggregated_spendings_long <- bind_rows(aggregated_spendings_long_smalln,aggregated_spendings_long_largen)
+           
+
 ```
+
+Leider gibt es pro MerkmalskombinationxGetränketyp oft weniger als n = 10 Haushalte. Da solche Fallzahlen für reliable Schätzungen zu gering sind, legen wir Gruppen zusammen:
+Vorgehen:
+1. Männer und Frauen der gleichen Merkmalskombination zusammenlegen
+2. Falls so immer noch weniger als n = 10 Haushalte, werden die Altersgruppen zusammengelegt (mit der nächsthöheren) 
+-> in den codeblock s.o. implementiert
+
+
 
 ### Ergebnisfile
 
@@ -793,3 +910,6 @@ table(evs_strata_trinkgruppe$einkommensgruppe) #n personen pro einkommensgruppe
 evs %>% filter(mischgetraenke_menge > 0 & !any(grepl("bier|wein|sprit", names(evs)))) # es gibt keine Haushalte, die nur Mischgetränke kaufen 
 ```
 Es liegen Daten von **n = 10.351** Haushalten in der EVS vor, von denen **n = 7.506** Alkohlkäufe berichten. Extrahiert man einzelne (erwachsene) Haushaltsmitglieder, liegen die Daten von **n = 13.611** Personen über 18 Jahren vor. Dementsprechend gibt es **pro Haushalt durchschnittlich 1,8 Personen** über 18 Jahren.
+
+
+
