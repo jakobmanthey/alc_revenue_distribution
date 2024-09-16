@@ -446,26 +446,32 @@ evs$Sprit_Menge_stdd <- evs$sprit_likör_menge_stdd + evs$sprit_whisky_menge_std
 ```{r share over 64}
 evs <- evs %>% 
   rowwise() %>% 
-  mutate(allabove65 = !any(c_across(c(yob_pers1, yob_pers2, yob_pers3, yob_pers4, 
+  mutate(allabove64 = !any(c_across(c(yob_pers1, yob_pers2, yob_pers3, yob_pers4, 
                                       yob_pers5, yob_pers6, yob_pers7, yob_pers8)) > 1953, na.rm = TRUE)) %>%
   ungroup()
 
 evs$weight_bund <- as.numeric(evs$weight_bund)
 summary(evs$weight_bund)
-table(evs$allabove65)
+table(evs$allabove64)
 
 #check -> okay
-evs %>% select(yob_pers1, yob_pers2, yob_pers3, yob_pers4, yob_pers5, yob_pers6, yob_pers7, yob_pers8, allabove65)
+evs %>% select(yob_pers1, yob_pers2, yob_pers3, yob_pers4, yob_pers5, yob_pers6, yob_pers7, yob_pers8, allabove64)
+
+ggplot(evs, aes(x = allabove64, y = netequincome)) +
+  geom_violin() +
+  geom_boxplot(width = 0.1, outlier.shape = NA) + # outlier.shape = NA, um Outlier bei Bedarf zu verstecken
+  ylim(NA, 10000)
 
 #summary of total bought drinks
 shareoverunder65 <- evs %>%
-  group_by(allabove65) %>%
+  group_by(allabove64) %>%
   summarise(total_wine = sum(Wein_Menge_stdd * weight_bund, na.rm = TRUE),
             total_beer = sum(Bier_Menge_stdd* weight_bund, na.rm = TRUE),
             total_sprit = sum(Sprit_Menge_stdd* weight_bund, na.rm = TRUE),
             total_mix = sum(mischgetraenke_menge_stdd* weight_bund, na.rm = TRUE),
             total_all = total_wine + total_beer + total_sprit + total_mix) %>%
   ungroup()
+
 
 total_wine <- sum(shareoverunder65$total_wine,na.rm=TRUE)
 total_beer <- sum(shareoverunder65$total_beer,na.rm=TRUE)
@@ -475,39 +481,84 @@ total_all <- sum(shareoverunder65$total_all,na.rm=TRUE)
 
 
 # Anteil berechnen
-shareover65_wine <- shareoverunder65 %>%
-  filter(allabove65 == TRUE) %>%
+shareover64_wine <- shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
   pull(total_wine) / total_wine
 
-shareover65_beer <- shareoverunder65 %>%
-  filter(allabove65 == TRUE) %>%
+shareover64_beer <- shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
   pull(total_beer) / total_beer
 
-shareover65_sprit <- shareoverunder65 %>%
-  filter(allabove65 == TRUE) %>%
+shareover64_sprit <- shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
   pull(total_sprit) / total_sprit
 
-shareover65_mix <- shareoverunder65 %>%
-  filter(allabove65 == TRUE) %>%
+shareover64_mix <- shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
   pull(total_mix) / total_mix
 
-shareover65_all <- shareoverunder65 %>%
-  filter(allabove65 == TRUE) %>%
+shareover64_all <- shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
   pull(total_all) / total_all
 
-cat("Anteil über 65 - Wein:", shareover65_wine, "\n")
-cat("Anteil über 65 - Bier:", shareover65_beer, "\n")
-cat("Anteil über 65 - Sprit:", shareover65_sprit, "\n")
-cat("Anteil über 65 - Mischgetränke:", shareover65_mix, "\n")
-cat("Anteil über 65 - Gesamt:", shareover65_all, "\n")
+cat("Anteil über 65 - Wein:", shareover64_wine, "\n")
+cat("Anteil über 65 - Bier:", shareover64_beer, "\n")
+cat("Anteil über 65 - Sprit:", shareover64_sprit, "\n")
+cat("Anteil über 65 - Mischgetränke:", shareover64_mix, "\n")
+cat("Anteil über 65 - Gesamt:", shareover64_all, "\n")
 
-prop.table(table(evs$allabove65))
+prop.table(table(evs$allabove64))
+
+# summary der spendings
+
+spending_shareoverunder65 <- evs %>%
+  group_by(allabove64) %>%
+  summarise(total_wine = sum(Wein_Wert * weight_bund, na.rm = TRUE),
+            total_beer = sum(Bier_Wert* weight_bund, na.rm = TRUE),
+            total_sprit = sum(Sprit_Wert* weight_bund, na.rm = TRUE),
+            total_mix = sum(mischgetraenke_wert* weight_bund, na.rm = TRUE),
+            total_all = total_wine + total_beer + total_sprit + total_mix) %>%
+  ungroup()
+
+spend_total_wine <- sum(spending_shareoverunder65$total_wine,na.rm=TRUE)
+spend_total_beer <- sum(spending_shareoverunder65$total_beer,na.rm=TRUE)
+spend_total_sprit <- sum(spending_shareoverunder65$total_sprit,na.rm=TRUE)
+spend_total_mix <- sum(spending_shareoverunder65$total_mix,na.rm=TRUE)
+spend_total_all <- sum(spending_shareoverunder65$total_all,na.rm=TRUE)
+
+# Anteil berechnen
+spend_shareover64_wine <- spending_shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
+  pull(total_wine) / spend_total_wine
+
+spend_shareover64_beer <- spending_shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
+  pull(total_beer) / spend_total_beer
+
+spend_shareover64_sprit <- spending_shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
+  pull(total_sprit) / spend_total_sprit
+
+spend_shareover64_mix <- spending_shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
+  pull(total_mix) / spend_total_mix
+
+spend_shareover64_all <- spending_shareoverunder65 %>%
+  filter(allabove64 == TRUE) %>%
+  pull(total_all) / spend_total_all
+
+cat("Anteil über 64 - Wein:", spend_shareover64_wine, "\n")
+cat("Anteil über 64 - Bier:", spend_shareover64_beer, "\n")
+cat("Anteil über 64 - Sprit:", spend_shareover64_sprit, "\n")
+cat("Anteil über 64 - Mischgetränke:", spend_shareover64_mix, "\n")
+cat("Anteil über 64 - Gesamt:", spend_shareover64_all, "\n")
+
 
 total_weight <- sum(evs$weight_bund, na.rm = TRUE)
 
 # gewichtete fallzahlen und  shares berechnen
 N_aboveunder65 <- evs %>%
-  group_by(allabove65) %>%
+  group_by(allabove64) %>%
   summarise(n_weighted = sum(weight_bund, na.rm = TRUE)) %>%
   mutate(proportional_share = n_weighted / total_weight)
 ```
@@ -541,6 +592,11 @@ evs$Bier_Wert_pro_stdd_w <- with(evs, ifelse(Bier_Menge_stdd_w != 0, Bier_Wert_w
 evs$Wein_Wert_pro_stdd_w <- with(evs, ifelse(Wein_Menge_stdd_w != 0, Wein_Wert_w / Wein_Menge_stdd_w, 0))
 evs$Sprit_Wert_pro_stdd_w <- with(evs, ifelse(Sprit_Menge_stdd_w != 0, Sprit_Wert_w / Sprit_Menge_stdd_w, 0))
 evs$Mischgetraenke_Wert_pro_stdd_w <- with(evs, ifelse(mischgetraenke_menge_stdd != 0, mischgetraenke_wert_w / mischgetraenke_menge_stdd, 0))
+
+evs$gesamtmenge_stdd_w = with(evs, Bier_Menge_stdd_w + Wein_Menge_stdd_w + Sprit_Menge_stdd_w + mischgetraenke_menge_stdd_w)
+
+# Verteilung Haushaltstypen
+prop.table(table(evs[evs$gesamtmenge_stdd_w != 0,]$N_Haushaltsmitglieder))
 ```
 
 ```{r show spending}
