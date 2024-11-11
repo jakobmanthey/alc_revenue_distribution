@@ -44,8 +44,8 @@ print(evs_path)
 evs_raw <- read.csv(evs_path, header = TRUE, sep = ";", dec = ",", stringsAsFactors = FALSE)
 #ESA
 #esa_path_old <- file.path("../../ESA", "ESA_Alc_Share_240626.xlsx")
-esa_path <- file.path("../../ESA", "ESA_Alc_Share_240904.xlsx")
-esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Soziodemographische Gruppen")
+esa_path <- file.path("../../ESA", "ESA_Alc_Share_241031.xlsx")
+esa_socgruppen_raw <- readxl::read_excel(esa_path, sheet = "Sozio Gruppen (30 T)")
 ```  
 
 
@@ -144,8 +144,8 @@ evs[, grep("wein|bier|sprit|misch", names(evs))] <- sapply(evs[, grep("wein|bier
 
 ```{r factorise sex}
 # all columns beginning with sex to factor
-levels_sex <- c(1, 2)  # Die ursprünglichen Werte
-labels_sex <- c("Male", "Female")  # Die Labels, die verwendet werden sollen
+levels_sex <- c(1, 2)  # ursprüngliche Werte
+labels_sex <- c("Male", "Female")  # neue Labels
 
 # Alle Spalten, die "sex_pers" im Namen haben, identifizieren
 sex_columns <- grep("sex_pers", names(evs), value = TRUE)
@@ -347,13 +347,13 @@ table(evs$einkommensgruppe)
 # Auswahl der relevanten Spalten (Geschlecht, Alter, Einkommen, Risikoarm_kon(%), Riskant_kon(%), Hoch_kon(%)) für die Einteilung der Trinkgruppen (kon = nur unter Konsumierenden)
 
 esa_perctrinkgruppen <- esa_socgruppen_raw %>%
-  select("Geschlecht", "Alter", "Einkommen", "Risikoarm_kon", "Riskant_kon", "Hoch_kon")
+  select("Geschlecht", "Alter", "Einkommen", "Risikoarm_kon30", "Riskant_kon30", "Hoch_kon30")
 
 # Anpassen an EVS
 esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
   mutate(Einkommen_new = factor(Einkommen, levels = c("Niedriges Einkommen", "Mittleres Einkommen", "Hohes Einkommen"), labels = c("niedrig", "mittel", "hoch")),
          Alter_new = factor(sub(" Jahre", "", Alter), labels = c("18-34", "35-59", "60+"))) %>%
-  rename(Risikoarm = Risikoarm_kon, Riskant = Riskant_kon, Hoch = Hoch_kon)
+  rename(Risikoarm = Risikoarm_kon30, Riskant = Riskant_kon30, Hoch = Hoch_kon30)
 
 # Prozente zu Dezimalzahlen umwandeln
 esa_perctrinkgruppen <- esa_perctrinkgruppen %>%
@@ -516,11 +516,11 @@ shareover64_all <- shareoverunder65 %>%
   filter(allabove64 == TRUE) %>%
   pull(total_all) / total_all
 
-cat("Anteil über 65 - Wein:", shareover64_wine, "\n")
-cat("Anteil über 65 - Bier:", shareover64_beer, "\n")
-cat("Anteil über 65 - Sprit:", shareover64_sprit, "\n")
-cat("Anteil über 65 - Mischgetränke:", shareover64_mix, "\n")
-cat("Anteil über 65 - Gesamt:", shareover64_all, "\n")
+cat("Anteil über 64 - Wein:", shareover64_wine, "\n")
+cat("Anteil über 64 - Bier:", shareover64_beer, "\n")
+cat("Anteil über 64 - Sprit:", shareover64_sprit, "\n")
+cat("Anteil über 64 - Mischgetränke:", shareover64_mix, "\n")
+cat("Anteil über 64 - Gesamt:", shareover64_all, "\n")
 
 prop.table(table(evs$allabove64))
 
@@ -948,7 +948,7 @@ aggregated_spendings_long_largen <- aggregated_spendings_complete_large_n %>%
   pivot_wider(names_from = stat_type, values_from = value)
 
 
-#for all columns with beverage type == misch, set sex, einkommensgruppe, altersgruppe und trinkgruppe to "all"
+# Zusammengelegte Gruppen exkludieren, damit es keine doppelten Einträge gibt
 aggregated_spendings_long_largen <- aggregated_spendings_long_largen %>%
   filter(!is.na(n)) %>%
   rename(n_haushalte = n) %>%
@@ -975,7 +975,6 @@ Vorgehen:
 1. Männer und Frauen der gleichen Merkmalskombination zusammenlegen
 2. Falls so immer noch weniger als n = 10 Haushalte, werden die Altersgruppen zusammengelegt (mit der nächsthöheren) 
 -> in den codeblock s.o. implementiert
-
 
 
 ### Ergebnisfile
