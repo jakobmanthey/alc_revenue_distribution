@@ -40,9 +40,7 @@ ci_low & ci_high: SE anhand von n_haushalte berechnet
 
 **Probleme/offene Punkte bzgl. Berechnung:**
 
--   Alkoholische Getränke (Käufe im Ausland) abziehen? wenn ja, wie? Daten liegen nicht spezifisch für Getränketyp vor
-
--   Personen über 64 werden derzeit nicht berücksichtigt (25% des Gesamt-N), weil ESA Trinkgruppen nur bis 64 vorhanden
+-   Alkoholische Getränke (Käufe im Ausland) berücksichtigen? wenn ja, wie? Daten liegen nicht spezifisch für Getränketyp vor
 
 ## -\> to be added by Jakob/Carolin
 
