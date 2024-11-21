@@ -1,0 +1,184 @@
+---
+title: "Berechnung der durchschnittlichen Ausgaben pro Alkohol-Standarddrink"
+subtitle: "nach Getränketyp, Einkommen, Alter, Geschlecht und Trinkgruppe mittels EVS und ESA"
+author: "Anna"
+date: "2024-04-03"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn = -1)
+# ==================================================================================================================================================================
+# 0) ESSENTIALS
+# ______________________________________________________________________________________________________________________
+# clean workspace
+rm(list=ls())
+
+packages <- c("tidyverse", "readxl", "ggdist", "knitr", "kableExtra") 
+
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+# Load packages
+invisible(lapply(packages, library, character.only = TRUE))
+
+# Export des Outputs
+print(getwd())
+exportdata <- TRUE # TRUE -> resultierende Datafiles werden exportiert
+output_path <- "../Output/" # Pfad für Export der Ergebnisse
+if (!dir.exists(output_path)) {
+  dir.create(output_path)
+}
+```
+
+```{r load data, include=FALSE}
+## 1) LOAD DATA
+#EVS
+evs_path <- file.path("../Data", "evs_ngt2018_slr.csv")
+print(evs_path)
+evs_raw <- read.csv(evs_path, header = TRUE, sep = ";", dec = ",", stringsAsFactors = FALSE)
+```  
+
+
+# Datengrundlage
+## 1. EVS (Einkommens- und Verbrauchsstichprobe) 2018
+
+In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren sind vorhanden, werden aber zur Berechnen der durchschnittlichen Ausgaben pro Drink nicht berücksichtigt. Essenziell ist, dass es nur um AlkoholKÄUFE im Einzelhandel geht, nicht um den tatsächlichen Konsum. Ausgenommen sind ebenso Käufe in der Gastronomie.
+
+
+```{r, echo = FALSE}
+# -----------------------------------------------------------------------------------------------------------------------
+# 2.2) EVS
+
+# Filtern und Umbenennen der relevanten Variablen
+evs <- evs_raw %>%
+  rename(ID = "EF3", #HaushaltsID
+         N_Haushaltsmitglieder = "EF7", #Anzahl Personen im Haushalt
+         bier_untergärig_wert = "EF284u2", #ausgegebener Betrag für untergäriges Bier
+         bier_untergärig_menge = "EF284u1", #Menge des gekauften untergärigen Biers
+         bier_anderes_wert = "EF285u2", #ausgegebener Betrag für anderes Bier (altbier, kölsch, weizen, ...)
+         bier_anderes_menge = "EF285u1", #Menge des gekauften anderen Biers
+         bier_misch_wert = "EF287u2", #ausgegebener Betrag für Biermischgetränke, z.B. mit Cola
+         bier_misch_menge = "EF287u1", #Menge des gekauften Biermischgetränks
+         bier_ohneBez_wert = "EF288u2", #ausgegebener Betrag für Bier ohne nähere Bezeichnung
+         bier_ohneBez_menge = "EF288u1", #Menge des gekauften Biers ohne nähere Bezeichnung
+         mischgetraenke_wert = "EF272u2", #ausgegebener Betrag für Erfrischungsmixgetränke mit Alkoholgehalt unter 6%, z. B. Alkopops
+         mischgetraenke_menge = "EF272u1", #Menge des gekauften Erfrischungsmixgetränks
+         wein_rot_wert = "EF273u2", #ausgegebener Betrag für Rotwein
+         wein_rot_menge = "EF273u1", #Menge des gekauften Rotweins
+         wein_weiss_wert = "EF274u2", #ausgegebener Betrag für Weißwein
+         wein_weiss_menge = "EF274u1", #Menge des gekauften Weißweins
+         wein_rose_wert = "EF275u2", #ausgegebener Betrag für Roséwein
+         wein_rose_menge = "EF275u1", #Menge des gekauften Roséweins
+         wein_schaum_wert = "EF276u2", #ausgegebener Betrag für Schaumwein
+         wein_schaum_menge = "EF276u1", #Menge des gekauften Schaumweins
+         wein_apfel_wert = "EF277u2", #ausgegebener Betrag für Apfelwein
+         wein_apfel_menge = "EF277u1", #Menge des gekauften Apfelweins
+         wein_frucht_wert = "EF278u2", #ausgegebener Betrag für Fruchtwein
+         wein_frucht_menge = "EF278u1", #Menge des gekauften Fruchtweins
+         wein_wermut_wert = "EF279u2", #ausgegebener Betrag für Wermut
+         wein_wermut_menge = "EF279u1", #Menge des gekauften Wermuts
+         wein_sherry_wert = "EF280u2", #ausgegebener Betrag für Sherry
+         wein_sherry_menge = "EF280u1", #Menge des gekauften Sherrys
+         wein_portwein_wert = "EF281u2", #ausgegebener Betrag für Portwein
+         wein_portwein_menge = "EF281u1", #Menge des gekauften Portweins
+         wein_anderes_wert = "EF282u2", #ausgegebener Betrag für andere weinhaltige Getränke
+         wein_anderes_menge = "EF282u1", #Menge der gekauften anderen weinhaltigen Getränke
+         wein_ohneBez_wert = "EF283u2", #ausgegebener Betrag für Wein ohne nähere Bezeichnung
+         wein_ohneBez_menge = "EF283u1", #Menge des gekauften Weins ohne nähere Bezeichnung
+         sprit_likör_wert = "EF268u2", #ausgegebener Betrag für Likör
+         sprit_likör_menge = "EF268u1", #Menge des gekauften Likörs
+         sprit_whisky_wert = "EF269u2", #ausgegebener Betrag für Whisky
+         sprit_whisky_menge = "EF269u1", #Menge des gekauften Whiskys
+         sprit_branntwein_wert = "EF270u2", #ausgegebener Betrag für Branntwein
+         sprit_branntwein_menge = "EF270u1", #Menge des gekauften Branntweins
+         sprit_anderes_wert = "EF271u2", #ausgegebener Betrag für andere Spirituosen  (z.B. Rum, Wodka, Korn, ...) mehr als 6% Alkohol
+         sprit_anderes_menge = "EF271u1",
+         weight_bund = "EF31") %>% #Menge der gekauften anderen Spirituosen 
+  select(ID, N_Haushaltsmitglieder, bier_untergärig_wert, bier_untergärig_menge, bier_anderes_wert,
+         bier_anderes_menge, bier_misch_wert, bier_misch_menge, bier_ohneBez_wert, bier_ohneBez_menge, mischgetraenke_wert, mischgetraenke_menge,
+         wein_rot_wert, wein_rot_menge, wein_weiss_wert, wein_weiss_menge, wein_rose_wert, wein_rose_menge, wein_schaum_wert, wein_schaum_menge,
+         wein_apfel_wert, wein_apfel_menge, wein_frucht_wert, wein_frucht_menge, wein_wermut_wert, wein_wermut_menge, wein_sherry_wert,
+         wein_sherry_menge, wein_portwein_wert, wein_portwein_menge, wein_anderes_wert, wein_anderes_menge, wein_ohneBez_wert, wein_ohneBez_menge,
+         sprit_likör_wert, sprit_likör_menge, sprit_whisky_wert, sprit_whisky_menge, sprit_branntwein_wert, sprit_branntwein_menge, sprit_anderes_wert,
+         sprit_anderes_menge, weight_bund)
+```
+
+```{r drinks to numeric} 
+# Konvertiere alle Bier-, Wein- und Spirituosenmengen und -ausgaben in numerische Werte
+evs[, grep("wein|bier|sprit|misch", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
+```
+
+## Assign broader beverage categories to the drinks
+
+```{r buildcats}
+
+# 2.3) Zuordnung von Getränken zu Getränkekategorien
+getraenketypen <- c('bier','wein', 'sprit')
+bier <- c("bier_untergärig", "bier_anderes", "bier_misch", "bier_ohneBez")
+wein <- c("wein_rot", "wein_weiss", "wein_rose")
+sekt <- c("wein_schaum")
+spirituosen <- c("sprit_likör", "sprit_whisky", "sprit_branntwein", "sprit_anderes")
+
+evs_long <- pivot_longer(evs, cols = matches(paste0(getraenketypen, "_.*")), 
+                             names_to = c("Getraenketyp", ".value"),
+                             names_pattern = "(.*)_(.*)") %>%
+  select(-c(matches("mischgetr")))
+
+#new column for the broader beverage categories: bier, wein, sekt, spirituosen
+evs_long <- evs_long %>%
+  mutate(cat = case_when(
+    Getraenketyp %in% bier ~ "bier",
+    Getraenketyp %in% wein ~ "wein",
+    Getraenketyp %in% sekt ~ "sekt",
+    Getraenketyp %in% spirituosen ~ "spirituosen",
+    TRUE ~ NA_character_  # Standardwert, falls kein Match
+  ))
+
+#check NAs
+evs_long %>% filter(is.na(cat)) %>% select(Getraenketyp) %>% unique() #okay
+
+#remove all unnecessary categories and columns with menge = 0 and wert = 0 (nothing bought)
+evs_long <- evs_long %>% filter(!is.na(cat)) %>% filter(menge != 0 | wert != 0)
+
+```
+## Calculate spendings per category
+
+### function for calculation the confidence interval of the mean
+```{r calc_ci}
+ci_mean <- function(x) {
+  mean <- mean(x, na.rm = TRUE)
+  se <- sd(x, na.rm = TRUE)/sqrt(length(x))
+  lower_ci <- mean - 1.96*se
+  upper_ci <- mean + 1.96*se
+  return(c(mean, lower_ci, upper_ci))
+}
+```
+
+
+```{r calcspendings}
+evs_long$avgpriceperlit <- evs_long$wert/evs_long$menge
+
+unit <- c("bier" = 0.33, "wein" = 0.125, "sekt" = 0.125, "spirituosen" = 0.04)
+
+evs_long$unit <- unit[evs_long$cat]
+evs_long$avgpriceperunit <- evs_long$avgpriceperlit*evs_long$unit
+
+aggr_spends <- evs_long %>% group_by(cat) %>% summarise(mean_priceperunit_eur = mean(avgpriceperunit),
+                                                              IQR_priceperunit = IQR(avgpriceperunit),
+                                                              lower_ci = ci_mean(avgpriceperunit)[2],
+                                                              upper_ci = ci_mean(avgpriceperunit)[3],
+                                                              n_households = n(),
+                                                              unit_lit = unique(unit))
+```
+
+## save results
+```{r save_results}
+#save as rds
+saveRDS(aggr_spends, file = paste0(output_path, "aggr_spends.rds"))
+```
