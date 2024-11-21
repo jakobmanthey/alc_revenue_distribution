@@ -272,6 +272,27 @@ priceperunit_broadercats <- temp_df %>%
                       ifelse(grepl("Spirituosen", cat), "0,75l", 
                              ifelse(grepl("Mischgetränke", cat), "0,33l", "0")))))
 ```
+## Einschub: welchen Anteil hat sprit_likör an den gesamten Ausgaben für spirituosen?
+
+```{r sprit_likör}
+# Anteil von Likör an den gesamten Ausgaben für Spirituosen
+sprit_likör_share <- evs %>%
+  dplyr::summarize(
+    sprit_likör_wert = sum(sprit_likör_wert, na.rm = TRUE),
+    sprit_branntwein_wert = sum(sprit_branntwein_wert, na.rm = TRUE),
+    sprit_whisky_wert = sum(sprit_whisky_wert, na.rm = TRUE),
+    sprit_anderes_wert = sum(sprit_anderes_wert, na.rm = TRUE)
+  ) %>%
+  mutate(
+    sprit_gesamt_wert = sprit_likör_wert + sprit_branntwein_wert + sprit_whisky_wert + sprit_anderes_wert,
+    likör_share = sprit_likör_wert / sprit_gesamt_wert,
+    brantwein_share = sprit_branntwein_wert / sprit_gesamt_wert,
+    whisky_share = sprit_whisky_wert / sprit_gesamt_wert,
+    andere_share = sprit_anderes_wert / sprit_gesamt_wert
+  )
+
+
+```
 
 ### 1.1. Nettoäquivalenzeinkommen berechnen und Einkommensgruppen bilden
 
@@ -404,12 +425,14 @@ Zunächst werden die gekauften Mengen in Standarddrinks umgerechnet, um die Getr
 
 # Alkolholgehalt in Getränkearten
 abv <- c(bier_untergärig = 0.05, bier_anderes = 0.05, bier_misch = 0.025, bier_ohneBez = 0.05,
-         wein_rot = 0.13, wein_weiss = 0.13, wein_rose = 0.13, wein_schaum = 0.11, wein_apfel = 0.06, wein_frucht = 0.06, wein_wermut = 0.16, wein_sherry = 0.16, wein_portwein = 0.20, wein_anderes = 0.13, wein_ohneBez = 0.13,
+         wein_rot = 0.12, wein_weiss = 0.12, wein_rose = 0.12, wein_schaum = 0.11, wein_apfel = 0.06, wein_frucht = 0.06, wein_wermut = 0.16, wein_sherry = 0.16, wein_portwein = 0.20, wein_anderes = 0.12, wein_ohneBez = 0.12,
          sprit_likör = 0.4, sprit_whisky = 0.4, sprit_branntwein = 0.4, sprit_anderes = 0.41, mischgetraenke = 0.04)
 
-#note: "wein_schaum" hat hier weniger Alkoholgehalt als Wein, da jeweils der zweite Peak aus Table 1, Kuitunen-Paul et al. 2017 verwendet wurde (11 für Schaumwein, 13 für Wein)
+#note: "wein_schaum" hat hier weniger Alkoholgehalt als Wein, da jeweils der zweite Peak aus Table 1, Kuitunen-Paul et al. 2017 verwendet wurde (11 für Schaumwein, 12 für Wein): "The distribution of the category wine was left-skewed with two peaks (about 6.0 and 12.0% vol), with 25% of the beverages below 10% vol. The first peak mainly contained wine spritzer, mulled wine and must/new wine, while common red and white wines represented most beverages under the second peak."
 #note: "Sprit Anderes" examples are Korn, Rum, Wodka in the questionnaire -> used the catergory "Schnapps" from Table 1, Kuitunen-Paul et al. 2017
 #note: Alkoholgehalt von Mischgetränken in ESA: "1 Mischgetränk enthält im ESA 0.04L Spirituose mit 33% Vol Alc (die restlichen 0.26/0.36L sind dann nicht-alkoholisch)", daher wird hier Alkoholgehalt von 4% angenommen (Durschnitt von 0.3 und 0.4l Größe)
+#Portwein mit 20 % Alkoholgehalt, da in Kuitunen-Paul et al. 2017 nicht explizit aufgeführt, würde unter °fortified wine° fallen, aber Alkoholgehalt ist höher als in Paper angegeben (19-22% laut Wikipedia)
+#Likör: in EVS keine Trennung nach sweet liqueur und liqueur, daher Mittwelwert aus beidem (((1089*20.41) + (308*31.03))/(1089+308)) = 22.75% 
 
 
 standard_drink_g <- 12
