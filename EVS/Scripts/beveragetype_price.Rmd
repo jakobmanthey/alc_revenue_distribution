@@ -1,8 +1,8 @@
 ---
-title: "Berechnung der durchschnittlichen Ausgaben pro Alkohol-Standarddrink"
-subtitle: "nach Getränketyp, Einkommen, Alter, Geschlecht und Trinkgruppe mittels EVS und ESA"
+title: "Berechnung der durchschnittlichen Ausgaben für Wein, Bier, Sekt und Spirituosen"
+subtitle: "Datengrundlage: EVS"
 author: "Anna"
-date: "2024-04-03"
+date: "2024-11-21"
 output: 
   html_document:
     code_folding: hide
@@ -114,7 +114,7 @@ evs <- evs_raw %>%
 evs[, grep("wein|bier|sprit|misch", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
 ```
 
-## Assign broader beverage categories to the drinks
+# Assign broader beverage categories to the drinks
 
 ```{r buildcats}
 
@@ -147,9 +147,9 @@ evs_long %>% filter(is.na(cat)) %>% select(Getraenketyp) %>% unique() #okay
 evs_long <- evs_long %>% filter(!is.na(cat)) %>% filter(menge != 0 | wert != 0)
 
 ```
-## Calculate spendings per category
+# Calculate spendings per category
 
-### function for calculation the confidence interval of the mean
+## function for calculation the confidence interval of the mean
 ```{r calc_ci}
 ci_mean <- function(x) {
   mean <- mean(x, na.rm = TRUE)
@@ -160,7 +160,7 @@ ci_mean <- function(x) {
 }
 ```
 
-
+## calculate average price per unit and per liter
 ```{r calcspendings}
 evs_long$avgpriceperlit <- evs_long$wert/evs_long$menge
 
