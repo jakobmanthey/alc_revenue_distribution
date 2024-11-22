@@ -8,16 +8,15 @@ output:
     code_folding: hide
 ---
 
+# Load libraries and set up environment
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-options(warn = -1)
-# ==================================================================================================================================================================
-# 0) ESSENTIALS
-# ______________________________________________________________________________________________________________________
+knitr::opts_chunk$set(echo = TRUE) # show code as default
+options(warn = -1) # suppress warnings
+
 # clean workspace
 rm(list=ls())
 
-packages <- c("tidyverse", "readxl", "ggdist", "knitr", "kableExtra") 
+packages <- c("tidyverse", "readxl") 
 
 # Install packages not yet installed
 installed_packages <- packages %in% rownames(installed.packages())
@@ -27,17 +26,13 @@ if (any(installed_packages == FALSE)) {
 # Load packages
 invisible(lapply(packages, library, character.only = TRUE))
 
-# Export des Outputs
-print(getwd())
-exportdata <- TRUE # TRUE -> resultierende Datafiles werden exportiert
-output_path <- "../Output/" # Pfad für Export der Ergebnisse
-if (!dir.exists(output_path)) {
-  dir.create(output_path)
-}
+# Set path to output folder
+output_path <- "../Output/"
 ```
 
+# Load data
+
 ```{r load data, include=FALSE}
-## 1) LOAD DATA
 #EVS
 evs_path <- file.path("../Data", "evs_ngt2018_slr.csv")
 print(evs_path)
@@ -45,17 +40,9 @@ evs_raw <- read.csv(evs_path, header = TRUE, sep = ";", dec = ",", stringsAsFact
 ```  
 
 
-# Datengrundlage
-## 1. EVS (Einkommens- und Verbrauchsstichprobe) 2018
-
-In der EVS liegen Daten auf Haushaltsebene vor (n = 10351 Haushalte). Die Daten enthalten Informationen zu den Haushaltsmitgliedern, dem Haushaltsnettoeinkommen und den Ausgaben (Wert) und der gekauften Menge (in l) für verschiedene Getränkearten. Die Daten wurden im Jahr 2018 erhoben für einen Berichtszeitraum von einem Monat. Hochrechnungsfaktoren, um die Daten auf die Bevölkerung in Deutschland zu extrapolieren sind vorhanden, werden aber zur Berechnen der durchschnittlichen Ausgaben pro Drink nicht berücksichtigt. Essenziell ist, dass es nur um AlkoholKÄUFE im Einzelhandel geht, nicht um den tatsächlichen Konsum. Ausgenommen sind ebenso Käufe in der Gastronomie.
-
+# select relevant variables and rename them
 
 ```{r, echo = FALSE}
-# -----------------------------------------------------------------------------------------------------------------------
-# 2.2) EVS
-
-# Filtern und Umbenennen der relevanten Variablen
 evs <- evs_raw %>%
   rename(ID = "EF3", #HaushaltsID
          N_Haushaltsmitglieder = "EF7", #Anzahl Personen im Haushalt
@@ -98,50 +85,49 @@ evs <- evs_raw %>%
          sprit_branntwein_wert = "EF270u2", #ausgegebener Betrag für Branntwein
          sprit_branntwein_menge = "EF270u1", #Menge des gekauften Branntweins
          sprit_anderes_wert = "EF271u2", #ausgegebener Betrag für andere Spirituosen  (z.B. Rum, Wodka, Korn, ...) mehr als 6% Alkohol
-         sprit_anderes_menge = "EF271u1",
-         weight_bund = "EF31") %>% #Menge der gekauften anderen Spirituosen 
+         sprit_anderes_menge = "EF271u1") %>% #Menge der gekauften anderen Spirituosen 
   select(ID, N_Haushaltsmitglieder, bier_untergärig_wert, bier_untergärig_menge, bier_anderes_wert,
          bier_anderes_menge, bier_misch_wert, bier_misch_menge, bier_ohneBez_wert, bier_ohneBez_menge, mischgetraenke_wert, mischgetraenke_menge,
          wein_rot_wert, wein_rot_menge, wein_weiss_wert, wein_weiss_menge, wein_rose_wert, wein_rose_menge, wein_schaum_wert, wein_schaum_menge,
          wein_apfel_wert, wein_apfel_menge, wein_frucht_wert, wein_frucht_menge, wein_wermut_wert, wein_wermut_menge, wein_sherry_wert,
          wein_sherry_menge, wein_portwein_wert, wein_portwein_menge, wein_anderes_wert, wein_anderes_menge, wein_ohneBez_wert, wein_ohneBez_menge,
          sprit_likör_wert, sprit_likör_menge, sprit_whisky_wert, sprit_whisky_menge, sprit_branntwein_wert, sprit_branntwein_menge, sprit_anderes_wert,
-         sprit_anderes_menge, weight_bund)
+         sprit_anderes_menge)
 ```
 
 ```{r drinks to numeric} 
-# Konvertiere alle Bier-, Wein- und Spirituosenmengen und -ausgaben in numerische Werte
+# convert all drink variables to numeric
 evs[, grep("wein|bier|sprit|misch", names(evs))] <- sapply(evs[, grep("wein|bier|sprit|misch", names(evs))], as.numeric)
 ```
 
-# Assign broader beverage categories to the drinks
+# Assign broader beverage categories
 
 ```{r buildcats}
 
-# 2.3) Zuordnung von Getränken zu Getränkekategorien
-getraenketypen <- c('bier','wein', 'sprit')
-bier <- c("bier_untergärig", "bier_anderes", "bier_misch", "bier_ohneBez")
+getraenketypen <- c('bier','wein', 'sprit') #broader categories
+bier <- c("bier_untergärig", "bier_anderes", "bier_misch", "bier_ohneBez") #subcategories
 wein <- c("wein_rot", "wein_weiss", "wein_rose")
 sekt <- c("wein_schaum")
 spirituosen <- c("sprit_likör", "sprit_whisky", "sprit_branntwein", "sprit_anderes")
 
+# pivot data from wide to long format
 evs_long <- pivot_longer(evs, cols = matches(paste0(getraenketypen, "_.*")), 
                              names_to = c("Getraenketyp", ".value"),
                              names_pattern = "(.*)_(.*)") %>%
   select(-c(matches("mischgetr")))
 
-#new column for the broader beverage categories: bier, wein, sekt, spirituosen
+#new column for broader beverage categories: bier, wein, sekt, spirituosen
 evs_long <- evs_long %>%
   mutate(cat = case_when(
     Getraenketyp %in% bier ~ "bier",
     Getraenketyp %in% wein ~ "wein",
     Getraenketyp %in% sekt ~ "sekt",
     Getraenketyp %in% spirituosen ~ "spirituosen",
-    TRUE ~ NA_character_  # Standardwert, falls kein Match
+    TRUE ~ NA_character_  # if there is no match, return NA
   ))
 
 #check NAs
-evs_long %>% filter(is.na(cat)) %>% select(Getraenketyp) %>% unique() #okay
+evs_long %>% filter(is.na(cat)) %>% select(Getraenketyp) %>% unique() #okay, beverage that are not of interest are NA
 
 #remove all unnecessary categories and columns with menge = 0 and wert = 0 (nothing bought)
 evs_long <- evs_long %>% filter(!is.na(cat)) %>% filter(menge != 0 | wert != 0)
@@ -149,7 +135,7 @@ evs_long <- evs_long %>% filter(!is.na(cat)) %>% filter(menge != 0 | wert != 0)
 ```
 # Calculate spendings per category
 
-## function for calculation the confidence interval of the mean
+## function for calculationg confidence interval of the mean
 ```{r calc_ci}
 ci_mean <- function(x) {
   mean <- mean(x, na.rm = TRUE)
@@ -160,25 +146,26 @@ ci_mean <- function(x) {
 }
 ```
 
-## calculate average price per unit and per liter
+## calculate average spending
 ```{r calcspendings}
-evs_long$avgpriceperlit <- evs_long$wert/evs_long$menge
+evs_long$priceperlit <- evs_long$wert/evs_long$menge #price per liter
 
-unit <- c("bier" = 0.33, "wein" = 0.125, "sekt" = 0.125, "spirituosen" = 0.04)
+unit <- c("bier" = 0.33, "wein" = 0.125, "sekt" = 0.125, "spirituosen" = 0.04) #unit in liters
 
-evs_long$unit <- unit[evs_long$cat]
-evs_long$avgpriceperunit <- evs_long$avgpriceperlit*evs_long$unit
+evs_long$unit <- unit[evs_long$cat] #assign unit to each category
+evs_long$priceperunit <- evs_long$priceperlit*evs_long$unit #average price per unit
 
-aggr_spends <- evs_long %>% group_by(cat) %>% summarise(mean_priceperunit_eur = mean(avgpriceperunit),
-                                                              IQR_priceperunit = IQR(avgpriceperunit),
-                                                              lower_ci = ci_mean(avgpriceperunit)[2],
-                                                              upper_ci = ci_mean(avgpriceperunit)[3],
+aggr_spends <- evs_long %>% group_by(cat) %>% summarise(mean_priceperunit_eur = mean(priceperunit),
+                                                              IQR_priceperunit = IQR(priceperunit),
+                                                              lower_ci = ci_mean(priceperunit)[2],
+                                                              upper_ci = ci_mean(priceperunit)[3],
                                                               n_households = n(),
                                                               unit_lit = unique(unit))
 ```
 
-## save results
+# save results
 ```{r save_results}
 #save as rds
-saveRDS(aggr_spends, file = paste0(output_path, "aggr_spends.rds"))
+date <- format(Sys.Date(), "%Y-%m-%d")
+saveRDS(aggr_spends, file = paste0(output_path, "aggr_spends", date, ".rds"))
 ```
