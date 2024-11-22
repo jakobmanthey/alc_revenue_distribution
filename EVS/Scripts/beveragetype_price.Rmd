@@ -167,5 +167,5 @@ aggr_spends <- evs_long %>% group_by(cat) %>% summarise(mean_priceperunit_eur = 
 ```{r save_results}
 #save as rds
 date <- format(Sys.Date(), "%Y-%m-%d")
-saveRDS(aggr_spends, file = paste0(output_path, "aggr_spends", date, ".rds"))
+saveRDS(aggr_spends, file = paste0(output_path, "aggr_spends_", date, ".rds"))
 ```
