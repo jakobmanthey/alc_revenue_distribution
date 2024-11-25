@@ -150,7 +150,7 @@ ci_mean <- function(x) {
 ```{r calcspendings}
 evs_long$priceperlit <- evs_long$wert/evs_long$menge #price per liter
 
-unit <- c("bier" = 0.33, "wein" = 0.125, "sekt" = 0.125, "spirituosen" = 0.04) #unit in liters
+unit <- c("bier" = 0.33, "wein" = 0.125, "sekt" = 0.125, "spirituosen" = 0.05) #unit in liters
 
 evs_long$unit <- unit[evs_long$cat] #assign unit to each category
 evs_long$priceperunit <- evs_long$priceperlit*evs_long$unit #average price per unit
@@ -174,4 +174,10 @@ saveRDS(aggr_spends, file = paste0(output_path, "aggr_spends_EVS_", date, ".rds"
 
 #save as csv
 write.csv(aggr_spends, file = paste0(output_path, "aggr_spends_EVS_", date, ".csv"), row.names = FALSE)
+```
+
+# extra:distribution of spirituosen
+```{r dist_spirituosen}
+#count n of subtype of spirituosen
+evs_long %>% filter(cat == "spirituosen") %>% group_by(Getraenketyp) %>% summarise(n = n()) %>% arrange(desc(n))
 ```
