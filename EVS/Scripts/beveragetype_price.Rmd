@@ -156,11 +156,14 @@ evs_long$unit <- unit[evs_long$cat] #assign unit to each category
 evs_long$priceperunit <- evs_long$priceperlit*evs_long$unit #average price per unit
 
 aggr_spends <- evs_long %>% group_by(cat) %>% summarise(mean_priceperunit_eur = mean(priceperunit),
-                                                              IQR_priceperunit = IQR(priceperunit),
-                                                              lower_ci = ci_mean(priceperunit)[2],
-                                                              upper_ci = ci_mean(priceperunit)[3],
-                                                              n_households = n(),
-                                                              unit_lit = unique(unit))
+                                                        median_priceperunit_eur = median(priceperunit),
+                                                        IQR_priceperunit = IQR(priceperunit),
+                                                        IQR_lower = quantile(priceperunit, 0.25),
+                                                        IQR_upper = quantile(priceperunit, 0.75),
+                                                        CI_lower = ci_mean(priceperunit)[2],
+                                                        CI_upper = ci_mean(priceperunit)[3],
+                                                        n_households = n(),
+                                                        unit_lit = unique(unit))
 ```
 
 # save results
